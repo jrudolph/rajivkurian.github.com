@@ -1,0 +1,275 @@
+---
+layout: post
+title: "A simple Redis client using Spray io, actors ,futures and promises"
+date: 2012-12-25 17:52
+comments: true
+categories: [Scala, Akka, Futures, Promises, Actors, Spray]
+---
+
+I recently wrote a toy [Redis](http://redis.io/) client (only supports gets and sets) to experiment with the Scala 2.10 concurrency features. I was especially interested in playing with Futures and Promises and to see how they combine with Actors.
+
+I ended up using [Spray](http://spray.io) for all the networking needs. According to their website Spray's API is asynchronous, non-blocking and is based on Actors and Futures. It uses Java NIO internally like [Netty](http://netty.io). The [documentation](http://spray.io/documentation/spray-io/) is pretty exhaustive and had answers to most questions that I had.
+
+We start with our build.sbt file to get all the dependencies in order.
+``` scala build.sbt
+name := "redis-actor"
+
+version := "1.0"
+
+scalaVersion := "2.10.0"
+
+scalacOptions ++= Seq("-unchecked", "-deprecation", "-encoding", "utf8")
+
+// Typesafe.
+resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
+
+// Spray.
+resolvers += "spray repo" at "http://repo.spray.io"
+
+libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.1.0"
+
+libraryDependencies += "io.spray" % "spray-io" % "1.1-M7"
+```
+
+Our Redis Client extends Spray IOClient. From the Spray documentation: The IOClient is a simple actor base class for client-side networking components. It builds upon an IOBridge and provides client-side connection management. Sounds good to me.
+<!-- more -->
+
+We start with the protocol our client will support. We only plan to support the Redis get and set commands.
+``` scala RedisClient
+object RedisClient {
+  case class Get(key: String)
+  case class Set(key: String, value: String)
+  class KeyNotFoundException extends Exception
+}
+```
+#### A brief aside on Redis and the Redis Protocol.
+The Redis [protocol](http://redis.io/topics/protocol) is very simple. Every Redis command can be serialized to the following form:
+<pre><code>*&lt;number of arguments&gt; CR LF&#x000A;$&lt;number of bytes of argument 1&gt; CR LF&#x000A;&lt;argument data&gt; CR LF&#x000A;...&#x000A;$&lt;number of bytes of argument N&gt; CR LF&#x000A;&lt;argument data&gt; CR LF&#x000A;</code></pre>
+So a simple Redis get for a "hello" key would look like:
+<pre><code>*3&#x000A;$2&#x000A;GET&#x000A;$5&#x000A;hello&#x000A;</code></pre>
+
+Great! That sounds easy given we only want to implement the Get and Set commands. So once we establish a TCP connection with the Redis server all we need to do is translate our get and set commands using the above protocol and send them over the wire. The responses are also encoded using the same protocol.
+
+But how do we match responses on the TCP connection to the requests we sent earlier? The answer is Redis will send responses in the same order that it received the requests. So if I send two successful requests Request A and Request B (A before B) and then I receive two responses Request C and Request D (C before D), I can assume that C is the response to request A and D is the response to Request B. In short we need to track the order of the requests so that when the responses arrive we can match them up and dispatch the responses appropriately.
+
+#### Scala Futures and Promises.
+If you don't know much about the future and promises spec I recommend reading [1](https://speakerdeck.com/heathermiller/futures-and-promises-in-scala-2-dot-10) or [2](http://docs.scala-lang.org/sips/pending/futures-promises.html). From here on I assume that you know have a rough idea about Futures and Promises.
+
+##### Our API and Implementation
+To support an synchronous API we will use Scala 2.10 Futures and Promises.
+Everytime we receive a request we will do the following:
+
+1.  Encode the request using the Redis protocol.
+2.  Send the bytes across the wire.
+3.  Create a promise representing the result of the request from (1) and add it to a queue.
+4.  Send the caller a future that is backed by the promise from (3)
+
+``` scala RedisClient1
+class RedisClient(_ioBridge: ActorRef) extends IOClient(_ioBridge) {
+  // Our queue to maintain the order of requests.
+  val promiseQueue = new scala.collection.mutable.Queue[Promise[_]]
+
+  // We will use this connection to store our connection to the Redis server.
+  var connection: Connection = _
+
+  override def receive = myReceive orElse super.receive
+
+  def myReceive: Receive = {
+    case RedisClient.Get(key) => {
+      val readCommand = "*2\r\n" +
+                        "$3\r\n" +
+                        "GET\r\n" +
+                        "$" + key.length + "\r\n" +
+                        key + "\r\n"
+      // Send the command bytes to Redis and queue a promise with the type of the expected result.
+      sendRedisCommand(readCommand, Promise[String])
+    }
+    case RedisClient.Set(key, value) => {
+      val writeCommand = "*3\r\n" +
+                          "$3\r\n" +
+                          "SET\r\n" +
+                          "$" + key.length + "\r\n" +
+                          key + "\r\n" +
+                          "$" + value.length + "\r\n" +
+                          value + "\r\n"
+      sendRedisCommand(writeCommand, Promise[Boolean])
+    }
+    case IOClient.Closed(_, reason) => println("Conenection closed ", reason)
+  }
+
+  def sendRedisCommand(command: String, resultPromise: Promise[_]) {
+    // Send the bytes to the Redis Server.
+    connection.ioBridge ! IOBridge.Send(connection, BufferBuilder(command).toByteBuffer)
+    // Add the promise to our queue and pipe the future to the caller.
+    promiseQueue += resultPromise
+    val f = resultPromise.future
+    pipe(f) to sender
+  }
+}
+```
+Now when we receive a response from the Redis-server we do the following:
+<ol start="5">
+<li> Decode the response</li>
+<li> Fetch from our queue, the promise associated with the pending request</li>
+<li> Complete the promise from (6) with the decoded response.</li>
+</ol>
+Spray sends our actor a message when we receive bytes on a connected client. These bytes represent an encoded Redis response. You might observe that the parsing of the redis responses is very shabby and does not check for errors. I am sure you can write code that is more modular and robust. Let's modify the myRecieve partial function to complete our parsing logic:
+
+``` scala myReceive2
+  def myReceive: Receive = {
+    case RedisClient.Get(key) => {
+      val readCommand = "*2\r\n" +
+                       "$3\r\n" +
+                       "GET\r\n" +
+                       "$" + key.length + "\r\n" +
+                       key + "\r\n"
+      // Send the command bytes to Redis and queue a promise with the type of the expected result.
+      sendRedisCommand(readCommand, Promise[String])
+    }
+    case RedisClient.Set(key, value) => {
+      val writeCommand = "*3\r\n" +
+                          "$3\r\n" +
+                          "SET\r\n" +
+                          "$" + key.length + "\r\n" +
+                          key + "\r\n" +
+                          "$" + value.length + "\r\n" +
+                          value + "\r\n"
+      sendRedisCommand(writeCommand, Promise[Boolean])
+    }
+
+    // NEW STUFF HERE ......
+    case IOClient.Received(handle, buffer) => {
+      val z = buffer.drainToString
+      println("received something from redis:\n" + z)
+      // We first split the response to get the different "lines".
+      val responseArray = z.split("\r\n")
+      // We zip with index so that we can move to certain indices of the response Array.
+      responseArray.zipWithIndex.foreach { case (response, index) =>
+        if (response startsWith "+") {
+          // Must be a response to a SET request. Check if the string after "+" is an "OK".
+          val setAnswer = response.substring(1, response.length)
+          val nextPromise = promiseQueue.dequeue.asInstanceOf[Promise[Boolean]]
+          nextPromise success (if (setAnswer == "OK") true else false)
+        } else if (response startsWith "$") {
+          // Must be a response to a GET request. The next line contains the result.
+          if (response endsWith "-1") {
+            nextPromise failure (new RedisClient.KeyNotFoundException)
+          } else {
+            nextPromise success responseArray(index + 1)
+          }
+        }
+      }
+    }
+    case IOClient.Closed(_, reason) => println("Conenection closed ", reason)
+  }
+```
+
+Almost there. We will write a factory method that connects to a Redis Server, creates a new RedisClient class and makes sure it has a reference to the connection that it can use to communicate with the Redis server. We create a new kind of message SetConnection that we use to make sure our client has a reference to the connection with the RedisServer. Note the use of the implicit ActorSystem which makes the API a bit prettier.
+``` scala RedisClient-object
+object RedisClient {
+  case class Get(key: String)
+  case class Set(key: String, Value: String)
+  class KeyNotFoundException extends Exception
+  case class SetConnection(handle: Connection)
+  def apply(host: String, port: Int, ioBridge: ActorRef) (implicit system: ActorSystem) = {
+    val client = system.actorOf(Props(new RedisClient(ioBridge)), "redis-client")
+    implicit val timeout = Timeout(5 seconds)
+    // Block here.
+    val IOClient.Connected(handle) = Await.result(client.ask(IOClient.Connect(host, port)), timeout.duration)
+    client ! SetConnection(handle)
+    client
+  }
+}
+```
+We need to also modify our client's myReceive partial function to process the SetConnection message
+``` scala myReceive3
+  def myReceive: Receive = {
+    case RedisClient.SetConnection(connection: Connection) => this.connection = connection
+    // Rest of the stuff remains the same.
+    .....
+    .....
+  }
+```
+#### Using the client.
+Now for an example of our client being used. To run this we need to make sure that we have a local instance of Redis running on port 6379. We set a bunch of keys to some values and later get these values and verify that they match our expectation. Some important observations are:
+
+*  We make liberal use of zip and unzip for the purpose of keeping the keys, values and the results in tuples so that we can print them out together. The examples might look a lot more complicated because of this.
+*  Since the client is an actor, the messages sent to it are serialized . Thus we do not have to worry about race conditions such as processing a get request before a corresponding set request (assuming that the code using the client does not make such a mistake).
+*  We use the mapTo syntax to coerce our results to the expected type. Maybe there should be a wrapper object which does this for us.
+*  We add success and failure handlers to the futures we receive from the RedisClient actor. We could have also used the onComplete handler instead. Note that a different thread might run these handlers. Here we merely print our results, but we need to be careful of more dangerous side effects like mutations. You are left on your own to deal with the Java Memory Model if you want to modify vars in these handlers. A safe way to do such a thing would be to serialize access through Actors or some other form of mutual exclusion like locking (Oh Noos).
+``` scala Main
+object Main extends App {
+  // We need an ActorSystem to host our application in.
+  implicit val system = ActorSystem()
+  // Create and start an IOBridge.
+  val ioBridge = IOExtension(system).ioBridge()
+  // The futures returned by the ask pattern will time out based on this implicit timeout.
+  implicit val timeout = Timeout(5 seconds)
+ // Our Redis client.
+  val client = RedisClient("127.0.0.1", 6379, ioBridge)
+
+  // Get a list of keys and values to set in Redis.
+  // keys = hello1, hello2, ...
+  // values = world1, world2, ...
+  val numKeys = 3
+  val (keys, values) = (1 to numKeys map { num => ("hello" + num, "world" + num) }).unzip
+
+  // Set the keys in Redis. We store the Futures with the keys and values to print them later.
+  val writeResults = keys zip values map { case (key, value) =>
+    (key, value, (client ? RedisClient.Set(key, value)).mapTo[Boolean])
+    }
+  writeResults foreach { case (key, value, result) =>
+    result onSuccess {
+      case someBoolean if someBoolean == true => println("Set " + key + " to value " + value)
+      case _ => println("Failed to set key " + key + " to value " + value)
+    }
+    result onFailure {
+      case t => println("Failed to set key " + key + " to value " + value + " : " + t)
+    }
+  }
+
+  // Get the keys from Redis. Store the keys with the Futures to print them later.
+  val readResults = keys map { key => (key, client.ask(RedisClient.Get(key)).mapTo[String]) }
+  readResults zip values foreach { case ((key, result), expectedValue) =>
+    result.onSuccess {
+      case resultString =>
+        println("Got a result for " + key + ": "+ resultString)
+        assert(resultString == expectedValue)
+    }
+    result.onFailure {
+      case t => println("Got some exception " + t)
+    }
+  }
+}
+```
+
+A few things I learnt about Futures and Promises from this exercise:
+
+*  Futures and Promises make it very easy to implement asynchronous code that is still easy to read.
+*  One has to be careful of the code they execute in the onComplete handlers of a future, since they execute in unknown threads.
+* When you want to send the results of Futures to the sender of an Actor - the pipe pattern is great to use. This internally adds a completion handler to the future and onComplete sends the results to the sender without blocking. The much more verbose and error-pronse alternative is to keep a reference to the current sender and to add the onComplete handlers yourself. More can be found [here](http://stackoverflow.com/questions/12455764/akka-avoiding-wrapping-future-when-responding-to-non-actor-code)
+*  Though not shown here futures are easy to compose - so to get a result from say concatenating three separate Redis GET results would be pretty easy.
+*  The order of completion of promises does not dictate the order in which the onComplete handlers on the attached futures are executed. For eg if you run our Main, you might see results printed in a weird order:
+<pre>
+Got a result for hello1: world1
+Got a result for hello2: world2
+Got a result for hello3: world3
+Set hello2 to value world2
+Set hello1 to value world1
+Set hello3 to value world3
+</pre>
+INSTEAD OF:
+<pre>
+Set hello1 to value world1
+Set hello2 to value world2
+Set hello3 to value world3
+Got a result for hello1: world1
+Got a result for hello2: world2
+Got a result for hello3: world3
+</pre>
+
+
+
+
+
+
