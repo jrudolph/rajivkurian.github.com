@@ -43,7 +43,7 @@ object RedisClient {
 }
 ```
 #### A brief aside on Redis and the Redis Protocol.
-The Redis [protocol](http://redis.io/topics/protocol) is very simple. Every Redis command can be serialized to the following form:
+Redis is an open source, advanced key-value store. It is very fast and used at a bunch of big companies including Twitter. The Redis [protocol](http://redis.io/topics/protocol) is very simple. Every Redis command can be serialized to the following form:
 <pre><code>*&lt;number of arguments&gt; CR LF&#x000A;$&lt;number of bytes of argument 1&gt; CR LF&#x000A;&lt;argument data&gt; CR LF&#x000A;...&#x000A;$&lt;number of bytes of argument N&gt; CR LF&#x000A;&lt;argument data&gt; CR LF&#x000A;</code></pre>
 So a simple Redis get for a "hello" key would look like:
 <pre><code>*3&#x000A;$2&#x000A;GET&#x000A;$5&#x000A;hello&#x000A;</code></pre>
@@ -53,7 +53,7 @@ Great! That sounds easy given we only want to implement the Get and Set commands
 But how do we match responses on the TCP connection to the requests we sent earlier? The answer is Redis will send responses in the same order that it received the requests. So if I send two successful requests Request A and Request B (A before B) and then I receive two responses Request C and Request D (C before D), I can assume that C is the response to request A and D is the response to Request B. In short we need to track the order of the requests so that when the responses arrive we can match them up and dispatch the responses appropriately.
 
 #### Scala Futures and Promises.
-If you don't know much about the future and promises spec I recommend reading [1](https://speakerdeck.com/heathermiller/futures-and-promises-in-scala-2-dot-10) or [2](http://docs.scala-lang.org/sips/pending/futures-promises.html). From here on I assume that you know have a rough idea about Futures and Promises.
+If you don't know much about the future and promises spec I recommend reading [1](https://speakerdeck.com/heathermiller/futures-and-promises-in-scala-2-dot-10) or [2](http://docs.scala-lang.org/sips/pending/futures-promises.html). From here on I assume that you have a rough idea about Futures and Promises.
 
 ##### Our API and Implementation
 To support an synchronous API we will use Scala 2.10 Futures and Promises.
@@ -140,7 +140,6 @@ Spray sends our actor a message when we receive bytes on a connected client. The
     // NEW STUFF HERE ......
     case IOClient.Received(handle, buffer) => {
       val z = buffer.drainToString
-      println("received something from redis:\n" + z)
       // We first split the response to get the different "lines".
       val responseArray = z.split("\r\n")
       // We zip with index so that we can move to certain indices of the response Array.
@@ -152,6 +151,7 @@ Spray sends our actor a message when we receive bytes on a connected client. The
           nextPromise success (if (setAnswer == "OK") true else false)
         } else if (response startsWith "$") {
           // Must be a response to a GET request. The next line contains the result.
+          val nextPromise = promiseQueue.dequeue.asInstanceOf[Promise[String]]
           if (response endsWith "-1") {
             nextPromise failure (new RedisClient.KeyNotFoundException)
           } else {
@@ -191,7 +191,7 @@ We need to also modify our client's myReceive partial function to process the Se
   }
 ```
 #### Using the client.
-Now for an example of our client being used. To run this we need to make sure that we have a local instance of Redis running on port 6379. We set a bunch of keys to some values and later get these values and verify that they match our expectation. Some important observations are:
+To run our Main we need to make sure that we have a local instance of Redis running on port 6379. We set a bunch of keys to some values and later get these values and verify that they match our expectation. Some points to note:
 
 *  We make liberal use of zip and unzip for the purpose of keeping the keys, values and the results in tuples so that we can print them out together. The examples might look a lot more complicated because of this.
 *  Since the client is an actor, the messages sent to it are serialized . Thus we do not have to worry about race conditions such as processing a get request before a corresponding set request (assuming that the code using the client does not make such a mistake).
@@ -243,11 +243,11 @@ object Main extends App {
 }
 ```
 
-A few things I learnt about Futures and Promises from this exercise:
+That wraps up a rather long post. To end things I want to talk about a few things I learnt about Futures and Promises from this exercise:
 
 *  Futures and Promises make it very easy to implement asynchronous code that is still easy to read.
 *  One has to be careful of the code they execute in the onComplete handlers of a future, since they execute in unknown threads.
-* When you want to send the results of Futures to the sender of an Actor - the pipe pattern is great to use. This internally adds a completion handler to the future and onComplete sends the results to the sender without blocking. The much more verbose and error-pronse alternative is to keep a reference to the current sender and to add the onComplete handlers yourself. More can be found [here](http://stackoverflow.com/questions/12455764/akka-avoiding-wrapping-future-when-responding-to-non-actor-code)
+* When you want to send the result of a Future to the sender of an Actor - the pipe pattern is a huge help. This internally adds a completion handler to the Future and onComplete sends the results to the sender without blocking. The much more verbose and error-pronse alternative is to keep a reference to the current sender and to add the onComplete handlers yourself. More can be found [here](http://stackoverflow.com/questions/12455764/akka-avoiding-wrapping-future-when-responding-to-non-actor-code)
 *  Though not shown here futures are easy to compose - so to get a result from say concatenating three separate Redis GET results would be pretty easy.
 *  The order of completion of promises does not dictate the order in which the onComplete handlers on the attached futures are executed. For eg if you run our Main, you might see results printed in a weird order:
 <pre>
