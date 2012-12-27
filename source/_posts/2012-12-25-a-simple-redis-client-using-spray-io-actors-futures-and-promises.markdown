@@ -5,6 +5,7 @@ date: 2012-12-25 17:52
 comments: true
 categories: [Scala, Akka, Futures, Promises, Actors, Spray]
 ---
+*Note:* The code for this post can be found [here](https://github.com/RajivKurian/toy-redis-client)
 
 I recently wrote a toy [Redis](http://redis.io/) client (only supports gets and sets) to experiment with the Scala 2.10 concurrency features. I was especially interested in playing with Futures and Promises and to see how they combine with Actors.
 
