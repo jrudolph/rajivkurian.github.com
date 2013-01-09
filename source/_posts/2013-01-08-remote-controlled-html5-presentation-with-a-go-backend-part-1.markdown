@@ -57,7 +57,7 @@ type Connection interface {
   Cleanup()
 }
 ```
-We start off with a websocket based implementation of the connection interface. The interface is generic enough for us to come up with other implementations like HTTP long polling, HTTP streaming or even TCP. That way browsers which do not support web sockets could still communicate with one's that do. 
+We start off with a websocket based implementation of the connection interface. The interface is generic enough for us to come up with other implementations like HTTP long polling, HTTP streaming or even TCP. That way clients that do not support web sockets could still communicate with ones that do. 
 ``` go connection.go
 // Keep pointers to a Hub and a websocket connection.
 type WebSocketConnection struct {
