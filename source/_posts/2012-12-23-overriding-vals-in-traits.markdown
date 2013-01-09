@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Overriding vals in traits"
+title: "Overriding vals in traits."
 date: 2012-12-23 21:59
 comments: true
 categories: [Scala, traits]

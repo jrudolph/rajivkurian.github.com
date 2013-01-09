@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "A simple Redis client using Spray io, actors ,futures and promises"
+title: "A simple Redis client using Spray io, actors, futures and promises."
 date: 2012-12-25 17:52
 comments: true
 categories: [Scala, Akka, Futures, Promises, Actors, Spray]
