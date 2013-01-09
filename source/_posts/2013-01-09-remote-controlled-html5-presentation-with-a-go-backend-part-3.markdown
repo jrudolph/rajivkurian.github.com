@@ -12,6 +12,7 @@ This is the third part of a three part series on building a remote-controlled pr
 #### Part 3.
 We built a working server in parts 1 and 2. Our server was also capable of serving static files. In this part we will use the excellent [reveal.js](https://github.com/hakimel/reveal.js) library for the actual presentation. I simply cloned https://github.com/hakimel/reveal.js into the directory for my go package and made edits to the index.html file to get a working presentation client.
 
+<!-- more -->
 We will use the default presentation that comes with reveal.js and add a layer to control it's behavior. Reveal.js exposes it's API through a Reveal object in JavaScript. We can use this object to move our presentation. It also fires a 'ready' event when the presentation is ready to start navigating. We will listen for this event and in response connect to our server and:
 
 1.  Register as presentation "123". In part 2 this is the only presentation id that we support.
