@@ -185,4 +185,4 @@ func wsHandler(ws *websocket.Conn) {
   c.StartReader()
 }
 ```
-We have a working websocket connection now. In Part 2 we'll look at the implementation of the hub that let's remote clients talk to the presentation clients. 
+We have a working websocket connection now. In Part 2 we'll look at the implementation of the hub that let's remote-controller clients talk to the presentation clients. 
