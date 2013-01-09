@@ -21,7 +21,7 @@ The application is very simple:
 
 1.  A client connects to the server and register with a presentation id. It register's either as a presentation or as a remote-controller.
 2.  If we find a corresponding presentation id we add a presentation client's connection to a hub representing that id.
-3.  Remote-controller clients can send messages like "left", "right", "up", "down" to navigate all the presentations on a given ub.
+3.  Remote-controller clients can send messages like "left", "right", "up", "down" to navigate all the presentations on a given hub.
 
 Okay let's see some code. We start with our presentation messages. We represent our protocol messages with an int. If we wanted to add more message types this would be the place to start. Our protocol supports basic slide movement messages and a Unknown message for things that are ... well unknown.
 
