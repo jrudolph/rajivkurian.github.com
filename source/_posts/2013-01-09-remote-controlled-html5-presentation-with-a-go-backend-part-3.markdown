@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Remote controlled html5 presentation with a Go backend - Part 3"
+title: "Remote controlled html5 presentation with a Go backend - Part 3."
 date: 2013-01-09 01:27
 comments: true
 categories: [Go, HTML5, websocket]
