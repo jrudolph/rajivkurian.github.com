@@ -1,0 +1,601 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Remote controlled html5 presentation with a Go backend - Part 1. - Rajiv's Blog</title>
+  <meta name="author" content="Rajiv Kurian">
+
+  
+  <meta name="description" content="What is this? This is the first part of a three part series on building a remote-controlled presentation app in Go. Also see Part 2 and Part 3. The &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="Rajiv's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-37425728-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Rajiv's Blog</a></h1>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:RajivKurian.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Remote Controlled Html5 Presentation With a Go Backend - Part 1.</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-08T22:38:00-08:00" pubdate data-updated="true">Jan 8<span>th</span>, 2013</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><h4>What is this?</h4>
+
+<p>This is the first part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Part 2</a> and <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Part 3</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 1.</h4>
+
+<p>At work I am busy writing the connection layer for one of our backend services. We are mainly looking at Scala libraries like <a href="http://twitter.github.com/finagle/">Finagle</a> and <a href="http://spray.io">Spray.io</a>. I spent some time last year looking at <a href="http://golang.org">Go</a>, especially it&#8217;s concurrency facilities. Playing with all the Scala networking libraries, I was curious to see how it would be to write a server in Go. Go comes with a surprisingly complete standard library. Most other things one needs are also available as packages. For a thorough introduction to Go&#8217;s networking libraries please see <a href="http://jan.newmarch.name/go/">Network programming with Go</a>. <a href="http://gary.beagledreams.com/page/go-websocket-chat.html">Here</a> is a great websocket-chat demo that I looked at to understand some Go patterns.</p>
+
+<!-- more -->
+
+
+<p>I ended up building a application that allows one to remote control a HTML5 presentation. This would let control a presentation running on a projector with a remote-control on another device - say your mobile phone. I used the excellent <a href="http://lab.hakim.se/reveal-js">reveal.js</a> library for the HTML5 presentation part. The reasons for using reveal.js were two fold:</p>
+
+<ol>
+<li>I did not want to write too much HTML to get a complete application working.</li>
+<li>The best way to make a trivial demo look great is to pair it with an already impressive library and steal some of it&#8217;s thunder. Reveal.js does that for my application.</li>
+</ol>
+
+
+<p>The application is very simple:</p>
+
+<ol>
+<li>A client connects to the server and register with a presentation id. It register&#8217;s either as a presentation or as a remote-controller.</li>
+<li>If we find a corresponding presentation id we add a presentation client&#8217;s connection to a hub representing that id.</li>
+<li>Remote-controller clients can send messages like &#8220;left&#8221;, &#8220;right&#8221;, &#8220;up&#8221;, &#8220;down&#8221; to navigate all the presentations on a given hub.</li>
+</ol>
+
+
+<p>Okay let&#8217;s see some code. We start with our presentation messages. We represent our protocol messages with an int. If we wanted to add more message types this would be the place to start. Our protocol supports basic slide movement messages and a Unknown message for things that are &#8230; well unknown.</p>
+
+<figure class='code'><figcaption><span>presentation.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">package</span> <span class="n">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">import</span> <span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">type</span> <span class="n">PresentationMsg</span> <span class="nb">int</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">const</span> <span class="p">(</span>
+</span><span class='line'>  <span class="n">Left</span>    <span class="p">=</span> <span class="mi">1</span>
+</span><span class='line'>  <span class="n">Right</span>   <span class="p">=</span> <span class="mi">2</span>
+</span><span class='line'>  <span class="n">Up</span>      <span class="p">=</span> <span class="mi">3</span>
+</span><span class='line'>  <span class="n">Down</span>    <span class="p">=</span> <span class="mi">4</span>
+</span><span class='line'>  <span class="n">Unknown</span> <span class="p">=</span> <span class="mi">5</span>
+</span><span class='line'><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Lets start with the meat of the application now. We define an interface that represents our connections. These connections could have different implementations. Interfaces in Go tend to be brief. We only have two methods on our interface - one to enable writing messages to a connection and another to clean the connection in case of errors. The connection is responsible for reading messages from the client, deserializing them to protocol messages and sending them to our hub - this is not defined in the interface. We also add some imports that we will  use later.</p>
+
+<figure class='code'><figcaption><span>connection.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">package</span> <span class="n">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;code.google.com/p/go.net/websocket&quot;</span>
+</span><span class='line'>  <span class="s">&quot;errors&quot;</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;strings&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">type</span> <span class="n">Connection</span> <span class="k">interface</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">Write</span><span class="p">(</span><span class="n">msg</span> <span class="n">PresentationMsg</span><span class="p">)</span> <span class="n">error</span>
+</span><span class='line'>  <span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We start off with a websocket based implementation of the connection interface. The interface is generic enough for us to come up with other implementations like HTTP long polling, HTTP streaming or even TCP. That way clients that do not support web sockets could still communicate with ones that do.</p>
+
+<figure class='code'><figcaption><span>connection.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="c1">// Keep pointers to a Hub and a websocket connection.</span>
+</span><span class='line'><span class="k">type</span> <span class="n">WebSocketConnection</span> <span class="k">struct</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">hub</span> <span class="p">*</span><span class="n">Hub</span> <span class="c1">// We will see the Hub implementation later.</span>
+</span><span class='line'>  <span class="n">ws</span>  <span class="p">*</span><span class="n">websocket</span><span class="p">.</span><span class="n">Conn</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Implements the Cleanup method of the Connection interface.</span>
+</span><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">c</span> <span class="p">*</span><span class="n">WebSocketConnection</span><span class="p">)</span> <span class="n">Cleanup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">c</span><span class="p">.</span><span class="n">ws</span><span class="p">.</span><span class="n">Close</span><span class="p">()</span>  <span class="c1">// Close the websocket connection.</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Implementation of the Write method of the Connection interface.</span>
+</span><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">c</span> <span class="p">*</span><span class="n">WebSocketConnection</span><span class="p">)</span> <span class="n">Write</span><span class="p">(</span><span class="n">msg</span> <span class="n">PresentationMsg</span><span class="p">)</span> <span class="n">error</span> <span class="p">{</span>
+</span><span class='line'><span class="c1">// Serialize our protocol msg.</span>
+</span><span class='line'>  <span class="k">var</span> <span class="n">stringMsg</span> <span class="nb">string</span>
+</span><span class='line'>  <span class="k">switch</span> <span class="n">msg</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">case</span> <span class="n">Left</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;left&quot;</span>
+</span><span class='line'>  <span class="k">case</span> <span class="n">Right</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;right&quot;</span>
+</span><span class='line'>  <span class="k">case</span> <span class="n">Up</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;up&quot;</span>
+</span><span class='line'>  <span class="k">case</span> <span class="n">Down</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;down&quot;</span>
+</span><span class='line'>  <span class="c1">// We should only expect to handle slide movement msges here.</span>
+</span><span class='line'>  <span class="k">default</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;&quot;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">if</span> <span class="n">stringMsg</span> <span class="p">!=</span> <span class="s">&quot;&quot;</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">err</span> <span class="p">:=</span> <span class="n">websocket</span><span class="p">.</span><span class="n">Message</span><span class="p">.</span><span class="n">Send</span><span class="p">(</span><span class="n">c</span><span class="p">.</span><span class="n">ws</span><span class="p">,</span> <span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>    <span class="c1">// If there is an error close the connection.</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">err</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="n">errors</span><span class="p">.</span><span class="n">New</span><span class="p">(</span><span class="s">&quot;Got an unknown msg.&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Our websocket connection now implements the connection interface and can be treated as one. We still need a way for the websocket connection to read messages from the client and send them to our Hub. We define a method StartReader() to do just this. We specifically try to handle the following messages:</p>
+
+<ol>
+<li>Connection messages used to connect to a particular hub. This can be used by both presentation clients and remote-controller clients.</li>
+<li>Remote-control messages used to move the slides. We expect these to only come from remote-controller clients.</li>
+</ol>
+
+
+<figure class='code'><figcaption><span>connection.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">c</span> <span class="p">*</span><span class="n">WebSocketConnection</span><span class="p">)</span> <span class="n">StartReader</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'><span class="c1">// Keep receiving messages in a for loop unless there is some error.</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">var</span> <span class="n">stringMsg</span> <span class="nb">string</span>
+</span><span class='line'>    <span class="n">err</span> <span class="p">:=</span> <span class="n">websocket</span><span class="p">.</span><span class="n">Message</span><span class="p">.</span><span class="n">Receive</span><span class="p">(</span><span class="n">c</span><span class="p">.</span><span class="n">ws</span><span class="p">,</span> <span class="p">&amp;</span><span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">break</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;Received a msg &quot;</span> <span class="p">+</span> <span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// a &quot;join&quot; msg is of the form &quot;join(Remote/Presentation):presentationId&quot;.</span>
+</span><span class='line'>    <span class="c1">// For eg: joinRemote:123</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">strings</span><span class="p">.</span><span class="n">HasPrefix</span><span class="p">(</span><span class="n">stringMsg</span><span class="p">,</span> <span class="s">&quot;joinRemote&quot;</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">presentationId</span> <span class="p">:=</span> <span class="n">strings</span><span class="p">.</span><span class="n">Split</span><span class="p">(</span><span class="n">stringMsg</span><span class="p">,</span> <span class="s">&quot;:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+</span><span class='line'>      <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;Msg: JoinRemote: &quot;</span> <span class="p">+</span> <span class="n">presentationId</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="c1">// Again we will see the hub implementation later. We try to retrieve a hub</span>
+</span><span class='line'>      <span class="c1">// from a global map of hubs otherwise we send an errorMsg to the client and cleanup.</span>
+</span><span class='line'>      <span class="k">if</span> <span class="n">hub</span><span class="p">,</span> <span class="n">ok</span> <span class="p">:=</span> <span class="n">hubMap</span><span class="p">[</span><span class="n">presentationId</span><span class="p">];</span> <span class="n">ok</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">hub</span> <span class="p">=</span> <span class="p">&amp;</span><span class="n">hub</span>  <span class="c1">// Keep a pointer to the hub so that it can be used later.</span>
+</span><span class='line'>      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">writeErrorMsg</span><span class="p">(</span><span class="s">&quot;Invalid Presentation id: &quot;</span> <span class="p">+</span> <span class="n">presentationId</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">strings</span><span class="p">.</span><span class="n">HasPrefix</span><span class="p">(</span><span class="n">stringMsg</span><span class="p">,</span> <span class="s">&quot;joinPresentation&quot;</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">presentationId</span> <span class="p">:=</span> <span class="n">strings</span><span class="p">.</span><span class="n">Split</span><span class="p">(</span><span class="n">stringMsg</span><span class="p">,</span> <span class="s">&quot;:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+</span><span class='line'>      <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;Msg: Join: &quot;</span> <span class="p">+</span> <span class="n">presentationId</span><span class="p">)</span>
+</span><span class='line'>      <span class="c1">// If there is an entry for this presentation then register this connection</span>
+</span><span class='line'>      <span class="c1">// with it otherwise send an error.</span>
+</span><span class='line'>      <span class="k">if</span> <span class="n">hub</span><span class="p">,</span> <span class="n">ok</span> <span class="p">:=</span> <span class="n">hubMap</span><span class="p">[</span><span class="n">presentationId</span><span class="p">];</span> <span class="n">ok</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">hub</span> <span class="p">=</span> <span class="p">&amp;</span><span class="n">hub</span>
+</span><span class='line'>        <span class="n">hub</span><span class="p">.</span><span class="n">registerConnection</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+</span><span class='line'>      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">writeErrorMsg</span><span class="p">(</span><span class="s">&quot;Invalid Presentation id: &quot;</span> <span class="p">+</span> <span class="n">presentationId</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">c</span><span class="p">.</span><span class="n">hub</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// Accept remote msges only if there is a valid presentation hub.</span>
+</span><span class='line'>      <span class="k">var</span> <span class="n">msg</span> <span class="n">PresentationMsg</span>
+</span><span class='line'>      <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;Msg: Remote: &quot;</span> <span class="p">+</span> <span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">switch</span> <span class="n">stringMsg</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;left&quot;</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Left</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;right&quot;</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Right</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;up&quot;</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Up</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;down&quot;</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Down</span>
+</span><span class='line'>      <span class="k">default</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Unknown</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">if</span> <span class="n">msg</span> <span class="p">!=</span> <span class="n">Unknown</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">hub</span><span class="p">.</span><span class="n">sendMsg</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+</span><span class='line'>      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">writeErrorMsg</span><span class="p">(</span><span class="s">&quot;Not a valid Msg: &quot;</span> <span class="p">+</span> <span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">hub</span><span class="p">.</span><span class="n">unregisterConnection</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span> <span class="c1">// Send an error msg and cleanup.</span>
+</span><span class='line'>      <span class="n">c</span><span class="p">.</span><span class="n">writeErrorMsg</span><span class="p">(</span><span class="s">&quot;Must register with a valid presentationId before sending msges&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Almost done with our websocket connection. We define a function wsHandler that will be later used by our websocket server. The websocket server will create a new go routine with our handler for every websocket connection. For every new websocket connection we create a WebsocketConnection object and call the startReader method on it. Again since our handler is run as a go routine startReader will not block the application. We also make use of go&#8217;s defer facility to clean up when the handler exits.</p>
+
+<figure class='code'><figcaption><span>connection.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">func</span> <span class="n">wsHandler</span><span class="p">(</span><span class="n">ws</span> <span class="p">*</span><span class="n">websocket</span><span class="p">.</span><span class="n">Conn</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">c</span> <span class="p">:=</span> <span class="p">&amp;</span><span class="n">WebSocketConnection</span><span class="p">{</span><span class="n">hub</span><span class="p">:</span> <span class="n">nil</span><span class="p">,</span> <span class="n">ws</span><span class="p">:</span> <span class="n">ws</span><span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="k">func</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// Unregister here.</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">c</span><span class="p">.</span><span class="n">hub</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">c</span><span class="p">.</span><span class="n">hub</span><span class="p">.</span><span class="n">unregisterConnection</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;A websocket handler exited&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}()</span>
+</span><span class='line'>  <span class="c1">// Start reader.</span>
+</span><span class='line'>  <span class="n">c</span><span class="p">.</span><span class="n">StartReader</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We have a working websocket connection now. In Part 2 we&#8217;ll look at the implementation of the hub that let&#8217;s remote-controller clients talk to the presentation clients.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Rajiv Kurian</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-08T22:38:00-08:00" pubdate data-updated="true">Jan 8<span>th</span>, 2013</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/go/'>Go</a>, <a class='category' href='/blog/categories/html5/'>HTML5</a>, <a class='category' href='/blog/categories/websocket/'>websocket</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/" data-via="" data-counturl="http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/" title="Previous Post: A simple Redis client using Spray io, actors, futures and promises.">&laquo; A simple Redis client using Spray io, actors, futures and promises.</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/" title="Next Post: Remote controlled html5 presentation with a Go backend - Part 2.">Remote controlled html5 presentation with a Go backend - Part 2. &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Remote controlled html5 presentation with a Go backend - Part 3.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Remote controlled html5 presentation with a Go backend - Part 2.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Remote controlled html5 presentation with a Go backend - Part 1.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/">A simple Redis client using Spray io, actors, futures and promises.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/23/overriding-vals-in-traits/">Overriding vals in traits.</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+<section>
+  <h1>About Me</h1>
+  <p>I work as a software engineer primarily writing backend services.</p>
+  <p> At my datytime job I primarily work on a Scala and Akka stack. In my spare time I like playing with languages such as Go. My topics of interest include concurrency and distributed systems.</p>
+</section>
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Rajiv Kurian -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'rajivsblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/';
+        var disqus_url = 'http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

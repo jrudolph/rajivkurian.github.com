@@ -1,0 +1,553 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: HTML5 | Rajiv's Blog]]></title>
+  <link href="http://RajivKurian.github.com/blog/categories/html5/atom.xml" rel="self"/>
+  <link href="http://RajivKurian.github.com/"/>
+  <updated>2013-01-17T23:28:14-08:00</updated>
+  <id>http://RajivKurian.github.com/</id>
+  <author>
+    <name><![CDATA[Rajiv Kurian]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Remote controlled html5 presentation with a Go backend - Part 3.]]></title>
+    <link href="http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/"/>
+    <updated>2013-01-09T01:27:00-08:00</updated>
+    <id>http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3</id>
+    <content type="html"><![CDATA[<h4>What is this?</h4>
+
+<p>This is the third part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Part 1</a> and <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Part 2</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 3.</h4>
+
+<p>We built a working server in parts 1 and 2. Our server was also capable of serving static files. In this part we will use the excellent <a href="https://github.com/hakimel/reveal.js">reveal.js</a> library for the actual presentation. I simply cloned https://github.com/hakimel/reveal.js into the directory for my go package and made edits to the index.html file to get a working presentation client.</p>
+
+<!-- more -->
+
+
+<p>We will use the default presentation that comes with reveal.js and add a layer to control it's behavior. Reveal.js exposes it's API through a Reveal object in JavaScript. We can use this object to move our presentation. It also fires a 'ready' event when the presentation is ready to start navigating. We will listen for this event and in response connect to our server and:</p>
+
+<ol>
+<li>Register as presentation "123". In part 2 this is the only presentation id that we support.</li>
+<li>Listen to messages over our websocket connection and react by moving the slides accordingly.</li>
+</ol>
+
+
+<p>``` html index.html</p>
+
+<!-- a bunch of other stuff that comes in reveal.js here -->
+
+
+<pre><code>&lt;script&gt;
+  // This is all reveal.js configuration code.
+  // Full list of configuration options available here:
+  // https://github.com/hakimel/reveal.js#configuration
+  Reveal.initialize({
+    controls: true,
+    progress: true,
+    history: true,
+    center: true,
+
+    theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+    transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/none
+
+    // Optional libraries used to extend on reveal.js
+    dependencies: [
+      { src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+      { src: 'plugin/markdown/showdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+      { src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+      { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+      { src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+      { src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+      // { src: 'plugin/remotes/remotes.js', async: true, condition: function() { return !!document.body.classList; } }
+    ]
+  });
+
+  // Our stuff starts here.
+  var conn;  // Our websocket connection.
+  Reveal.addEventListener( 'ready', function(event) {
+    if (window["WebSocket"]) {
+      conn = new WebSocket("ws://localhost:8080/ws");
+      conn.onclose = function(evt) {
+        console.log("Connection closed.")
+      }
+      conn.onopen = function(evt) {
+        conn.send("joinPresentation:123")
+      }
+      conn.onmessage = function(evt) {
+        var msg = evt.data
+        switch (msg) {
+          case "left":
+          Reveal.left();
+          break;
+          case "right":
+          Reveal.right();
+          break;
+          case "up":
+          Reveal.up();
+          break;
+          case "down":
+          Reveal.down();
+          break;
+          default: console.log("Unknown msg " + msg)
+        }
+      }
+    } else {
+      console.log("This browser does not support websockets.")
+    }
+  });
+&lt;/script&gt;
+</code></pre>
+
+<p>  </body>
+</html>
+```
+Next we need to write our remote-controller client. I ripped off the design of the controller on the reveal.js homepage and made a bigger, uglier and less semantic version of it on a file called remote.html. I'll spare you the HTML and CSS horror (see the <a href="https://github.com/RajivKurian/remote-presentation/blob/master/remote.html">source</a> if you dare). I used this <a href="http://css-tricks.com/snippets/css/css-triangle/">article</a> to draw CSS triangles. I also copied the color of the controls and the radial gradient from reveal.js.</p>
+
+<p><img src="/images/remote-control.png"></p>
+
+<p>I'll focus on the javascript instead. Like before we connect to our server and:</p>
+
+<ol>
+<li>Register as a remote-controller for presentation "123".</li>
+<li>Listen to onclick events on our control DOM nodes and send corresponding protocol messages to the server.</li>
+</ol>
+
+
+<p>Note that we do not need to listen to messages from the server since this is a remote-controller.</p>
+
+<p>``` html remote.html</p>
+
+<script type="text/javascript">
+  var conn;
+  var isSocketOpen = false;
+
+$(document).ready(function() {
+  console.log("document is ready")
+  var up = $("#up");
+  var down = $("#down");
+  var left = $("#left");
+  var right = $("#right");
+  up.click(function() {
+    sendMessage("up");
+  });
+  down.click(function() {
+    sendMessage("down");
+  });
+  left.click(function() {
+    sendMessage("left");
+  });
+  right.click(function() {
+    sendMessage("right");
+  });
+});
+
+  function sendMessage(direction) {
+    console.log("direction is " + direction)
+    if (!conn || !isSocketOpen) {
+      return;
+    }
+    conn.send(direction);
+  }
+
+$(function() {
+  if (window["WebSocket"]) {
+    conn = new WebSocket("ws://localhost:8080/ws");
+    conn.onclose = function(evt) {
+    console.log("Connection lost");
+    isSocketOpen = false;
+    }
+    conn.onopen =function(evt) {
+      isSocketOpen = true;
+      conn.send("joinRemote:123")
+    }
+    conn.onmessage = function(evt) {
+      console.log("Should not be getting any msges since this is a remote." + evt.data)
+    }
+  } else {
+    console.log("This browser does not support websockets")
+  }
+});
+</script>
+
+
+<p>```
+<em>Yes I log errors to the console!</em> We now have all the pieces necessary to run the demo. You can use the remote-controller (possibly on your mobile phone) to navigate the reveal.js presentation in all of it's "transitiony" glory.</p>
+
+<p>This brings the three part series to an end. I thoroughly enjoyed writing this demo and showing it to my friends. This is the first server I wrote in Go and it was a surprisingly pleasant experience. I might write another article about my experience with Go and compare it to Scala.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Remote controlled html5 presentation with a Go backend - Part 2.]]></title>
+    <link href="http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/"/>
+    <updated>2013-01-09T00:17:00-08:00</updated>
+    <id>http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2</id>
+    <content type="html"><![CDATA[<h4>What is this?</h4>
+
+<p>This is the second part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Part 1</a> and <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Part 3</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 2.</h4>
+
+<p>In Part 1 we implemented a websocket connection that would let a client send and receive our protocol messages. We saw sporadic references to a hub that was supposed to manage the communication between remote-controller clients and presentation clients. This hub needs to:</p>
+
+<ol>
+<li>Have a way for presentation connections to register or unregister themselves.</li>
+<li>Have a way to broadcast messages from remote-controller clients to presentation clients.</li>
+</ol>
+
+
+<!-- more -->
+
+
+<p>Let's look at the implementation. As always we start off with our imports. A hub contains a map with a Connection key (covered in <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Part 1</a>) and a boolean value. Go does not have a set data structure in the standard library. Using a map seems to be a standard way of getting it to work like a set. We use this map/set to keep a track of the hub's connections. We have three channels that are used to send the hub messages. We define register/unregister channels that are used to add/remove connections from the hub. We also have a remote channel that can be used by a remote-controller client to broadcast messages to the presentation clients on this hub. Note: I use "client" and "connection" interchangeably since each connection actually represents a client.
+``` go hub.go
+package main</p>
+
+<p>import (
+  "code.google.com/p/go.net/websocket"
+  "flag"
+  "fmt"
+  "net/http"
+)</p>
+
+<p>type Hub struct {
+  presentations map[Connection]bool
+  register      chan Connection
+  unregister    chan Connection
+  remote        chan PresentationMsg
+}
+<code>
+Let's add some methods to our Hub so that our connections can call these methods to interact with a hub instead of sending it messages on it's channels. This will let us transparently change the implementation later.
+</code> go hub.go
+func (h *Hub) registerConnection(c Connection) {
+  h.register &lt;- c
+}</p>
+
+<p>func (h *Hub) unregisterConnection(c Connection) {
+  h.unregister &lt;- c
+}</p>
+
+<p>func (h <em>Hub) sendMsg(msg PresentationMsg) {
+  h.remote &lt;- msg
+}
+<code>
+Now that we have a way to receive and handle messages. We define a run method that will accomplish this. Later when using a hub we need to make sure that each active hub's run method is running as a go routine so that it accepts and processes messages sent to it. Register messages add a connection to the hub and unregister messages remove them. Remote messages come from a remote-controller client and are broadcast to presentation clients. Note that multiple remote-controller clients could potentially connect to the same hub and send messages messing things up. We could ensure that only one remote-control client connects to a hub but for the purpose of the demo we will live with this limitation.
+</code> go hub.go
+func (h </em>Hub) run() {
+  for {</p>
+
+<pre><code>select {
+case c := &lt;-h.register:
+  h.presentations[c] = true
+case c := &lt;-h.unregister:
+  delete(h.presentations, c)
+case msg := &lt;-h.remote:
+  for p := range h.presentations {
+    err := p.Write(msg) // The connection will clean itself if there is a write error.
+    if err != nil {
+      delete(h.presentations, p)
+    }
+  }
+}
+</code></pre>
+
+<p>  }
+}
+<code>
+Lets create a global map of hubs where hubs are stored by their presentation ids. Let's also create a single hub for our demo.
+</code> go hub.go
+var hubMap = make(map[string]Hub)</p>
+
+<p>var h = Hub{
+  presentations: make(map[Connection]bool),
+  register:      make(chan Connection),
+  unregister:    make(chan Connection),
+  remote:        make(chan PresentationMsg),
+}
+<code>
+Let's add our hub to the hub map with a presentation id of "123". We need to run go routines for each of our hubs (only 1 for this demo) to make sure they listen to messages sent to them. Finally we set up a HTTP and websocket server on port 8080. The HTTP server also serves all the files required for our web clients.
+</code> go hub.go
+var addr = flag.String("addr", ":8080", "http service address")</p>
+
+<p>func main() {
+  flag.Parse()</p>
+
+<p>  // For this demo we have a single id that presentations and remotes can connect to.
+  hubMap["123"] = h</p>
+
+<p>  for hubKey := range hubMap {</p>
+
+<pre><code>hubValue := hubMap[hubKey]
+fmt.Println("Running hub with id: " + hubKey)
+go hubValue.run()
+</code></pre>
+
+<p>  }
+  http.Handle("/", http.FileServer(http.Dir("./")))
+  http.Handle("/ws", websocket.Handler(wsHandler))
+  http.ListenAndServe(":8080", nil)
+}
+```
+This concludes Part 2. We have a running server that can connect presentations to their remote-controllers. In Part 3 we will write some Javascript to connect to our server. We will listen to messages from the server and move our presentation slides using the <a href="http://lab.hakim.se/reveal-js">reveal.js</a> API.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Remote controlled html5 presentation with a Go backend - Part 1.]]></title>
+    <link href="http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/"/>
+    <updated>2013-01-08T22:38:00-08:00</updated>
+    <id>http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1</id>
+    <content type="html"><![CDATA[<h4>What is this?</h4>
+
+<p>This is the first part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Part 2</a> and <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Part 3</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 1.</h4>
+
+<p>At work I am busy writing the connection layer for one of our backend services. We are mainly looking at Scala libraries like <a href="http://twitter.github.com/finagle/">Finagle</a> and <a href="http://spray.io">Spray.io</a>. I spent some time last year looking at <a href="http://golang.org">Go</a>, especially it's concurrency facilities. Playing with all the Scala networking libraries, I was curious to see how it would be to write a server in Go. Go comes with a surprisingly complete standard library. Most other things one needs are also available as packages. For a thorough introduction to Go's networking libraries please see <a href="http://jan.newmarch.name/go/">Network programming with Go</a>. <a href="http://gary.beagledreams.com/page/go-websocket-chat.html">Here</a> is a great websocket-chat demo that I looked at to understand some Go patterns.</p>
+
+<!-- more -->
+
+
+<p>I ended up building a application that allows one to remote control a HTML5 presentation. This would let control a presentation running on a projector with a remote-control on another device - say your mobile phone. I used the excellent <a href="http://lab.hakim.se/reveal-js">reveal.js</a> library for the HTML5 presentation part. The reasons for using reveal.js were two fold:</p>
+
+<ol>
+<li>I did not want to write too much HTML to get a complete application working.</li>
+<li>The best way to make a trivial demo look great is to pair it with an already impressive library and steal some of it's thunder. Reveal.js does that for my application.</li>
+</ol>
+
+
+<p>The application is very simple:</p>
+
+<ol>
+<li>A client connects to the server and register with a presentation id. It register's either as a presentation or as a remote-controller.</li>
+<li>If we find a corresponding presentation id we add a presentation client's connection to a hub representing that id.</li>
+<li>Remote-controller clients can send messages like "left", "right", "up", "down" to navigate all the presentations on a given hub.</li>
+</ol>
+
+
+<p>Okay let's see some code. We start with our presentation messages. We represent our protocol messages with an int. If we wanted to add more message types this would be the place to start. Our protocol supports basic slide movement messages and a Unknown message for things that are ... well unknown.</p>
+
+<p>``` go presentation.go
+package main</p>
+
+<p>import ()</p>
+
+<p>type PresentationMsg int</p>
+
+<p>const (
+  Left    = 1
+  Right   = 2
+  Up      = 3
+  Down    = 4
+  Unknown = 5
+)
+```</p>
+
+<p>Lets start with the meat of the application now. We define an interface that represents our connections. These connections could have different implementations. Interfaces in Go tend to be brief. We only have two methods on our interface - one to enable writing messages to a connection and another to clean the connection in case of errors. The connection is responsible for reading messages from the client, deserializing them to protocol messages and sending them to our hub - this is not defined in the interface. We also add some imports that we will  use later.
+``` go connection.go
+package main</p>
+
+<p>import (
+  "code.google.com/p/go.net/websocket"
+  "errors"
+  "fmt"
+  "strings"
+)</p>
+
+<p>type Connection interface {
+  Write(msg PresentationMsg) error
+  Cleanup()
+}
+<code>
+We start off with a websocket based implementation of the connection interface. The interface is generic enough for us to come up with other implementations like HTTP long polling, HTTP streaming or even TCP. That way clients that do not support web sockets could still communicate with ones that do.
+</code> go connection.go
+// Keep pointers to a Hub and a websocket connection.
+type WebSocketConnection struct {
+  hub <em>Hub // We will see the Hub implementation later.
+  ws  </em>websocket.Conn
+}</p>
+
+<p>// Implements the Cleanup method of the Connection interface.
+func (c *WebSocketConnection) Cleanup() {
+  c.ws.Close()  // Close the websocket connection.
+}</p>
+
+<p>// Implementation of the Write method of the Connection interface.
+func (c *WebSocketConnection) Write(msg PresentationMsg) error {
+// Serialize our protocol msg.
+  var stringMsg string
+  switch msg {
+  case Left:</p>
+
+<pre><code>stringMsg = "left"
+</code></pre>
+
+<p>  case Right:</p>
+
+<pre><code>stringMsg = "right"
+</code></pre>
+
+<p>  case Up:</p>
+
+<pre><code>stringMsg = "up"
+</code></pre>
+
+<p>  case Down:</p>
+
+<pre><code>stringMsg = "down"
+</code></pre>
+
+<p>  // We should only expect to handle slide movement msges here.
+  default:</p>
+
+<pre><code>stringMsg = ""
+</code></pre>
+
+<p>  }</p>
+
+<p>  if stringMsg != "" {</p>
+
+<pre><code>err := websocket.Message.Send(c.ws, stringMsg)
+// If there is an error close the connection.
+if err != nil {
+  c.Cleanup()
+}
+return err
+</code></pre>
+
+<p>  }
+  return errors.New("Got an unknown msg.")
+}
+```
+Our websocket connection now implements the connection interface and can be treated as one. We still need a way for the websocket connection to read messages from the client and send them to our Hub. We define a method StartReader() to do just this. We specifically try to handle the following messages:</p>
+
+<ol>
+<li>Connection messages used to connect to a particular hub. This can be used by both presentation clients and remote-controller clients.</li>
+<li><p>Remote-control messages used to move the slides. We expect these to only come from remote-controller clients.
+``` go connection.go
+func (c *WebSocketConnection) StartReader() {
+// Keep receiving messages in a for loop unless there is some error.
+for {
+var stringMsg string
+err := websocket.Message.Receive(c.ws, &amp;stringMsg)
+if err != nil {
+  break
+}
+fmt.Println("Received a msg " + stringMsg)</p>
+
+<p>// a "join" msg is of the form "join(Remote/Presentation):presentationId".
+// For eg: joinRemote:123
+if strings.HasPrefix(stringMsg, "joinRemote") {
+  presentationId := strings.Split(stringMsg, ":")[1]
+  fmt.Println("Msg: JoinRemote: " + presentationId)</p>
+
+<p>  // Again we will see the hub implementation later. We try to retrieve a hub
+  // from a global map of hubs otherwise we send an errorMsg to the client and cleanup.
+  if hub, ok := hubMap[presentationId]; ok {</p>
+
+<pre><code>c.hub = &amp;hub  // Keep a pointer to the hub so that it can be used later.
+</code></pre>
+
+  } else {
+
+<pre><code>c.writeErrorMsg("Invalid Presentation id: " + presentationId)
+c.Cleanup()
+</code></pre>
+
+  }
+} else if strings.HasPrefix(stringMsg, "joinPresentation") {
+  presentationId := strings.Split(stringMsg, ":")[1]
+  fmt.Println("Msg: Join: " + presentationId)
+  // If there is an entry for this presentation then register this connection
+  // with it otherwise send an error.
+  if hub, ok := hubMap[presentationId]; ok {
+
+<pre><code>c.hub = &amp;hub
+hub.registerConnection(c)
+</code></pre>
+
+  } else {
+
+<pre><code>c.writeErrorMsg("Invalid Presentation id: " + presentationId)
+c.Cleanup()
+</code></pre>
+
+  }
+} else if c.hub != nil {
+  // Accept remote msges only if there is a valid presentation hub.
+  var msg PresentationMsg
+  fmt.Println("Msg: Remote: " + stringMsg)
+  switch stringMsg {
+  case "left":
+
+<pre><code>msg = Left
+</code></pre>
+
+  case "right":
+
+<pre><code>msg = Right
+</code></pre>
+
+  case "up":
+
+<pre><code>msg = Up
+</code></pre>
+
+  case "down":
+
+<pre><code>msg = Down
+</code></pre>
+
+  default:
+
+<pre><code>msg = Unknown
+</code></pre>
+
+  }
+  if msg != Unknown {
+
+<pre><code>c.hub.sendMsg(msg)
+</code></pre>
+
+  } else {
+
+<pre><code>c.writeErrorMsg("Not a valid Msg: " + stringMsg)
+c.hub.unregisterConnection(c)
+c.Cleanup()
+</code></pre>
+
+<p>  }
+} else { // Send an error msg and cleanup.
+  c.writeErrorMsg("Must register with a valid presentationId before sending msges")
+  c.Cleanup()
+}
+}
+}
+<code>
+Almost done with our websocket connection. We define a function wsHandler that will be later used by our websocket server. The websocket server will create a new go routine with our handler for every websocket connection. For every new websocket connection we create a WebsocketConnection object and call the startReader method on it. Again since our handler is run as a go routine startReader will not block the application. We also make use of go's defer facility to clean up when the handler exits.
+</code> go connection.go
+func wsHandler(ws *websocket.Conn) {
+c := &amp;WebSocketConnection{hub: nil, ws: ws}
+defer func() {
+// Unregister here.
+if c.hub != nil {
+  c.hub.unregisterConnection(c)
+}
+fmt.Println("A websocket handler exited")
+}()
+// Start reader.
+c.StartReader()
+}
+```
+We have a working websocket connection now. In Part 2 we'll look at the implementation of the hub that let's remote-controller clients talk to the presentation clients.</p></li>
+</ol>
+
+]]></content>
+  </entry>
+  
+</feed>

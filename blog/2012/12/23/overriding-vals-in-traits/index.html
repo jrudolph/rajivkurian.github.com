@@ -1,0 +1,277 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Overriding vals in traits. - Rajiv's Blog</title>
+  <meta name="author" content="Rajiv Kurian">
+
+  
+  <meta name="description" content="When implementing traits we often want to override the vals declared in said trait. One way to achieve this is to treat the val as a field of the &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://RajivKurian.github.com/blog/2012/12/23/overriding-vals-in-traits/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="Rajiv's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-37425728-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Rajiv's Blog</a></h1>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:RajivKurian.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Overriding Vals in Traits.</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-23T21:59:00-08:00" pubdate data-updated="true">Dec 23<span>rd</span>, 2012</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>When implementing traits we often want to override the vals declared in said trait.</p>
+
+<p>One way to achieve this is to treat the val as a field of the constructor. A contrived example is:</p>
+
+<!-- more -->
+
+
+<div><script src='https://gist.github.com/4246797.js'></script>
+<noscript><pre><code>trait Foo {
+  val a: Int
+  def printA = println(a)
+}
+
+class Bar(val a: Int) extends Foo
+
+// User Bar like this:
+
+val aBar = new Bar(42)
+aBar.printA</code></pre></noscript></div>
+
+
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Rajiv Kurian</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-23T21:59:00-08:00" pubdate data-updated="true">Dec 23<span>rd</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/scala/'>Scala</a>, <a class='category' href='/blog/categories/traits/'>traits</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://RajivKurian.github.com/blog/2012/12/23/overriding-vals-in-traits/" data-via="" data-counturl="http://RajivKurian.github.com/blog/2012/12/23/overriding-vals-in-traits/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+      
+        <a class="basic-alignment right" href="/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/" title="Next Post: A simple Redis client using Spray io, actors, futures and promises.">A simple Redis client using Spray io, actors, futures and promises. &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Remote controlled html5 presentation with a Go backend - Part 3.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Remote controlled html5 presentation with a Go backend - Part 2.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Remote controlled html5 presentation with a Go backend - Part 1.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/">A simple Redis client using Spray io, actors, futures and promises.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/23/overriding-vals-in-traits/">Overriding vals in traits.</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+<section>
+  <h1>About Me</h1>
+  <p>I work as a software engineer primarily writing backend services.</p>
+  <p> At my datytime job I primarily work on a Scala and Akka stack. In my spare time I like playing with languages such as Go. My topics of interest include concurrency and distributed systems.</p>
+</section>
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Rajiv Kurian -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'rajivsblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://RajivKurian.github.com/blog/2012/12/23/overriding-vals-in-traits/';
+        var disqus_url = 'http://RajivKurian.github.com/blog/2012/12/23/overriding-vals-in-traits/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

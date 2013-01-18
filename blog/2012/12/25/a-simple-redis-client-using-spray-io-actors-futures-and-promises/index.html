@@ -1,0 +1,731 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>A simple Redis client using Spray io, actors, futures and promises. - Rajiv's Blog</title>
+  <meta name="author" content="Rajiv Kurian">
+
+  
+  <meta name="description" content="Note: The code for this post can be found here I recently wrote a toy Redis client (only supports gets and sets) to experiment with the Scala 2.10 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://RajivKurian.github.com/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="Rajiv's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-37425728-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Rajiv's Blog</a></h1>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:RajivKurian.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">A Simple Redis Client Using Spray Io, Actors, Futures and Promises.</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-25T17:52:00-08:00" pubdate data-updated="true">Dec 25<span>th</span>, 2012</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p><em>Note:</em> The code for this post can be found <a href="https://github.com/RajivKurian/toy-redis-client">here</a></p>
+
+<p>I recently wrote a toy <a href="http://redis.io/">Redis</a> client (only supports gets and sets) to experiment with the Scala 2.10 concurrency features. I was especially interested in playing with Futures and Promises and to see how they combine with Actors.</p>
+
+<p>I ended up using <a href="http://spray.io">Spray</a> for all the networking needs. According to their website Spray&#8217;s API is asynchronous, non-blocking and is based on Actors and Futures. It uses Java NIO internally like <a href="http://netty.io">Netty</a>. The <a href="http://spray.io/documentation/spray-io/">documentation</a> is pretty exhaustive and had answers to most questions that I had.</p>
+
+<p>We start with our build.sbt file to get all the dependencies in order.</p>
+
+<figure class='code'><figcaption><span>build.sbt</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="n">name</span> <span class="o">:=</span> <span class="s">&quot;redis-actor&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">version</span> <span class="o">:=</span> <span class="s">&quot;1.0&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">scalaVersion</span> <span class="o">:=</span> <span class="s">&quot;2.10.0&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">scalacOptions</span> <span class="o">++=</span> <span class="nc">Seq</span><span class="o">(</span><span class="s">&quot;-unchecked&quot;</span><span class="o">,</span> <span class="s">&quot;-deprecation&quot;</span><span class="o">,</span> <span class="s">&quot;-encoding&quot;</span><span class="o">,</span> <span class="s">&quot;utf8&quot;</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Typesafe.</span>
+</span><span class='line'><span class="n">resolvers</span> <span class="o">+=</span> <span class="s">&quot;Typesafe Repository&quot;</span> <span class="n">at</span> <span class="s">&quot;http://repo.typesafe.com/typesafe/releases/&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Spray.</span>
+</span><span class='line'><span class="n">resolvers</span> <span class="o">+=</span> <span class="s">&quot;spray repo&quot;</span> <span class="n">at</span> <span class="s">&quot;http://repo.spray.io&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">libraryDependencies</span> <span class="o">+=</span> <span class="s">&quot;com.typesafe.akka&quot;</span> <span class="o">%%</span> <span class="s">&quot;akka-actor&quot;</span> <span class="o">%</span> <span class="s">&quot;2.1.0&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">libraryDependencies</span> <span class="o">+=</span> <span class="s">&quot;io.spray&quot;</span> <span class="o">%</span> <span class="s">&quot;spray-io&quot;</span> <span class="o">%</span> <span class="s">&quot;1.1-M7&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Our Redis Client extends Spray IOClient. From the Spray documentation: The IOClient is a simple actor base class for client-side networking components. It builds upon an IOBridge and provides client-side connection management. Sounds good to me.</p>
+
+<!-- more -->
+
+
+<p>We start with the protocol our client will support. We only plan to support the Redis get and set commands.</p>
+
+<figure class='code'><figcaption><span>RedisClient</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">RedisClient</span> <span class="o">{</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">value</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">class</span> <span class="nc">KeyNotFoundException</span> <span class="k">extends</span> <span class="nc">Exception</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>A brief aside on Redis and the Redis Protocol.</h4>
+
+<p>Redis is an open source, advanced key-value store. It is very fast and used at a bunch of big companies including Twitter. The Redis <a href="http://redis.io/topics/protocol">protocol</a> is very simple. Every Redis command can be serialized to the following form:</p>
+
+<pre><code>*&lt;number of arguments&gt; CR LF&#x000A;$&lt;number of bytes of argument 1&gt; CR LF&#x000A;&lt;argument data&gt; CR LF&#x000A;...&#x000A;$&lt;number of bytes of argument N&gt; CR LF&#x000A;&lt;argument data&gt; CR LF&#x000A;</code></pre>
+
+
+<p>So a simple Redis get for a &#8220;hello&#8221; key would look like:</p>
+
+<pre><code>*3&#x000A;$2&#x000A;GET&#x000A;$5&#x000A;hello&#x000A;</code></pre>
+
+
+<p>Great! That sounds easy given we only want to implement the Get and Set commands. So once we establish a TCP connection with the Redis server all we need to do is translate our get and set commands using the above protocol and send them over the wire. The responses are also encoded using the same protocol.</p>
+
+<p>But how do we match responses on the TCP connection to the requests we sent earlier? The answer is Redis will send responses in the same order that it received the requests. So if I send two successful requests Request A and Request B (A before B) and then I receive two responses Request C and Request D (C before D), I can assume that C is the response to request A and D is the response to Request B. In short we need to track the order of the requests so that when the responses arrive we can match them up and dispatch the responses appropriately.</p>
+
+<h4>Scala Futures and Promises.</h4>
+
+<p>If you don&#8217;t know much about the future and promises spec I recommend reading <a href="https://speakerdeck.com/heathermiller/futures-and-promises-in-scala-2-dot-10">1</a> or <a href="http://docs.scala-lang.org/sips/pending/futures-promises.html">2</a>. From here on I assume that you have a rough idea about Futures and Promises.</p>
+
+<h5>Our API and Implementation</h5>
+
+<p>To support an synchronous API we will use Scala 2.10 Futures and Promises.
+Everytime we receive a request we will do the following:</p>
+
+<ol>
+<li>Encode the request using the Redis protocol.</li>
+<li>Send the bytes across the wire.</li>
+<li>Create a promise representing the result of the request from (1) and add it to a queue.</li>
+<li>Send the caller a future that is backed by the promise from (3)</li>
+</ol>
+
+
+<figure class='code'><figcaption><span>RedisClient1</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">class</span> <span class="nc">RedisClient</span><span class="o">(</span><span class="nc">_ioBridge</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">IOClient</span><span class="o">(</span><span class="nc">_ioBridge</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>  <span class="c1">// Our queue to maintain the order of requests.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">promiseQueue</span> <span class="k">=</span> <span class="k">new</span> <span class="n">scala</span><span class="o">.</span><span class="n">collection</span><span class="o">.</span><span class="n">mutable</span><span class="o">.</span><span class="nc">Queue</span><span class="o">[</span><span class="kt">Promise</span><span class="o">[</span><span class="k">_</span><span class="o">]]</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// We will use this connection to store our connection to the Redis server.</span>
+</span><span class='line'>  <span class="k">var</span> <span class="n">connection</span><span class="k">:</span> <span class="kt">Connection</span> <span class="o">=</span> <span class="k">_</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">override</span> <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="n">myReceive</span> <span class="n">orElse</span> <span class="k">super</span><span class="o">.</span><span class="n">receive</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="n">myReceive</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">readCommand</span> <span class="k">=</span> <span class="s">&quot;*2\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                        <span class="s">&quot;$3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                        <span class="s">&quot;GET\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                        <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                        <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span>
+</span><span class='line'>      <span class="c1">// Send the command bytes to Redis and queue a promise with the type of the expected result.</span>
+</span><span class='line'>      <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">readCommand</span><span class="o">,</span> <span class="nc">Promise</span><span class="o">[</span><span class="kt">String</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">writeCommand</span> <span class="k">=</span> <span class="s">&quot;*3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;SET\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">value</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="n">value</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span>
+</span><span class='line'>      <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">writeCommand</span><span class="o">,</span> <span class="nc">Promise</span><span class="o">[</span><span class="kt">Boolean</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">IOClient</span><span class="o">.</span><span class="nc">Closed</span><span class="o">(</span><span class="k">_</span><span class="o">,</span> <span class="n">reason</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Conenection closed &quot;</span><span class="o">,</span> <span class="n">reason</span><span class="o">)</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">command</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">resultPromise</span><span class="k">:</span> <span class="kt">Promise</span><span class="o">[</span><span class="k">_</span><span class="o">])</span> <span class="o">{</span>
+</span><span class='line'>    <span class="c1">// Send the bytes to the Redis Server.</span>
+</span><span class='line'>    <span class="n">connection</span><span class="o">.</span><span class="n">ioBridge</span> <span class="o">!</span> <span class="nc">IOBridge</span><span class="o">.</span><span class="nc">Send</span><span class="o">(</span><span class="n">connection</span><span class="o">,</span> <span class="nc">BufferBuilder</span><span class="o">(</span><span class="n">command</span><span class="o">).</span><span class="n">toByteBuffer</span><span class="o">)</span>
+</span><span class='line'>    <span class="c1">// Add the promise to our queue and pipe the future to the caller.</span>
+</span><span class='line'>    <span class="n">promiseQueue</span> <span class="o">+=</span> <span class="n">resultPromise</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">f</span> <span class="k">=</span> <span class="n">resultPromise</span><span class="o">.</span><span class="n">future</span>
+</span><span class='line'>    <span class="n">pipe</span><span class="o">(</span><span class="n">f</span><span class="o">)</span> <span class="n">to</span> <span class="n">sender</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now when we receive a response from the Redis-server we do the following:</p>
+
+<ol start="5">
+<li> Decode the response</li>
+<li> Fetch from our queue, the promise associated with the pending request</li>
+<li> Complete the promise from (6) with the decoded response.</li>
+</ol>
+
+
+<p>Spray sends our actor a message when we receive bytes on a connected client. These bytes represent an encoded Redis response. You might observe that the parsing of the redis responses is very shabby and does not check for errors. I am sure you can write code that is more modular and robust. Let&#8217;s modify the myRecieve partial function to complete our parsing logic:</p>
+
+<figure class='code'><figcaption><span>myReceive2</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'>  <span class="k">def</span> <span class="n">myReceive</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">readCommand</span> <span class="k">=</span> <span class="s">&quot;*2\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                       <span class="s">&quot;$3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                       <span class="s">&quot;GET\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                       <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                       <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span>
+</span><span class='line'>      <span class="c1">// Send the command bytes to Redis and queue a promise with the type of the expected result.</span>
+</span><span class='line'>      <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">readCommand</span><span class="o">,</span> <span class="nc">Promise</span><span class="o">[</span><span class="kt">String</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">writeCommand</span> <span class="k">=</span> <span class="s">&quot;*3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;SET\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">value</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="n">value</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span>
+</span><span class='line'>      <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">writeCommand</span><span class="o">,</span> <span class="nc">Promise</span><span class="o">[</span><span class="kt">Boolean</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// NEW STUFF HERE ......</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">IOClient</span><span class="o">.</span><span class="nc">Received</span><span class="o">(</span><span class="n">handle</span><span class="o">,</span> <span class="n">buffer</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">z</span> <span class="k">=</span> <span class="n">buffer</span><span class="o">.</span><span class="n">drainToString</span>
+</span><span class='line'>      <span class="c1">// We first split the response to get the different &quot;lines&quot;.</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">responseArray</span> <span class="k">=</span> <span class="n">z</span><span class="o">.</span><span class="n">split</span><span class="o">(</span><span class="s">&quot;\r\n&quot;</span><span class="o">)</span>
+</span><span class='line'>      <span class="c1">// We zip with index so that we can move to certain indices of the response Array.</span>
+</span><span class='line'>      <span class="n">responseArray</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">foreach</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">response</span><span class="o">,</span> <span class="n">index</span><span class="o">)</span> <span class="k">=&gt;</span>
+</span><span class='line'>        <span class="k">if</span> <span class="o">(</span><span class="n">response</span> <span class="n">startsWith</span> <span class="s">&quot;+&quot;</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="c1">// Must be a response to a SET request. Check if the string after &quot;+&quot; is an &quot;OK&quot;.</span>
+</span><span class='line'>          <span class="k">val</span> <span class="n">setAnswer</span> <span class="k">=</span> <span class="n">response</span><span class="o">.</span><span class="n">substring</span><span class="o">(</span><span class="mi">1</span><span class="o">,</span> <span class="n">response</span><span class="o">.</span><span class="n">length</span><span class="o">)</span>
+</span><span class='line'>          <span class="k">val</span> <span class="n">nextPromise</span> <span class="k">=</span> <span class="n">promiseQueue</span><span class="o">.</span><span class="n">dequeue</span><span class="o">.</span><span class="n">asInstanceOf</span><span class="o">[</span><span class="kt">Promise</span><span class="o">[</span><span class="kt">Boolean</span><span class="o">]]</span>
+</span><span class='line'>          <span class="n">nextPromise</span> <span class="n">success</span> <span class="o">(</span><span class="k">if</span> <span class="o">(</span><span class="n">setAnswer</span> <span class="o">==</span> <span class="s">&quot;OK&quot;</span><span class="o">)</span> <span class="kc">true</span> <span class="k">else</span> <span class="kc">false</span><span class="o">)</span>
+</span><span class='line'>        <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">(</span><span class="n">response</span> <span class="n">startsWith</span> <span class="s">&quot;$&quot;</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="c1">// Must be a response to a GET request. The next line contains the result.</span>
+</span><span class='line'>          <span class="k">val</span> <span class="n">nextPromise</span> <span class="k">=</span> <span class="n">promiseQueue</span><span class="o">.</span><span class="n">dequeue</span><span class="o">.</span><span class="n">asInstanceOf</span><span class="o">[</span><span class="kt">Promise</span><span class="o">[</span><span class="kt">String</span><span class="o">]]</span>
+</span><span class='line'>          <span class="k">if</span> <span class="o">(</span><span class="n">response</span> <span class="n">endsWith</span> <span class="s">&quot;-1&quot;</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">nextPromise</span> <span class="n">failure</span> <span class="o">(</span><span class="k">new</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">KeyNotFoundException</span><span class="o">)</span>
+</span><span class='line'>          <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">nextPromise</span> <span class="n">success</span> <span class="n">responseArray</span><span class="o">(</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="o">)</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">IOClient</span><span class="o">.</span><span class="nc">Closed</span><span class="o">(</span><span class="k">_</span><span class="o">,</span> <span class="n">reason</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Conenection closed &quot;</span><span class="o">,</span> <span class="n">reason</span><span class="o">)</span>
+</span><span class='line'>  <span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Almost there. We will write a factory method that connects to a Redis Server, creates a new RedisClient class and makes sure it has a reference to the connection that it can use to communicate with the Redis server. We create a new kind of message SetConnection that we use to make sure our client has a reference to the connection with the RedisServer. Note the use of the implicit ActorSystem which makes the API a bit prettier.</p>
+
+<figure class='code'><figcaption><span>RedisClient-object</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">RedisClient</span> <span class="o">{</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="nc">Value</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">class</span> <span class="nc">KeyNotFoundException</span> <span class="k">extends</span> <span class="nc">Exception</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">SetConnection</span><span class="o">(</span><span class="n">handle</span><span class="k">:</span> <span class="kt">Connection</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">host</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">port</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">ioBridge</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span> <span class="o">(</span><span class="k">implicit</span> <span class="n">system</span><span class="k">:</span> <span class="kt">ActorSystem</span><span class="o">)</span> <span class="k">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">client</span> <span class="k">=</span> <span class="n">system</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">RedisClient</span><span class="o">(</span><span class="n">ioBridge</span><span class="o">)),</span> <span class="s">&quot;redis-client&quot;</span><span class="o">)</span>
+</span><span class='line'>    <span class="k">implicit</span> <span class="k">val</span> <span class="n">timeout</span> <span class="k">=</span> <span class="nc">Timeout</span><span class="o">(</span><span class="mi">5</span> <span class="n">seconds</span><span class="o">)</span>
+</span><span class='line'>    <span class="c1">// Block here.</span>
+</span><span class='line'>    <span class="k">val</span> <span class="nc">IOClient</span><span class="o">.</span><span class="nc">Connected</span><span class="o">(</span><span class="n">handle</span><span class="o">)</span> <span class="k">=</span> <span class="nc">Await</span><span class="o">.</span><span class="n">result</span><span class="o">(</span><span class="n">client</span><span class="o">.</span><span class="n">ask</span><span class="o">(</span><span class="nc">IOClient</span><span class="o">.</span><span class="nc">Connect</span><span class="o">(</span><span class="n">host</span><span class="o">,</span> <span class="n">port</span><span class="o">)),</span> <span class="n">timeout</span><span class="o">.</span><span class="n">duration</span><span class="o">)</span>
+</span><span class='line'>    <span class="n">client</span> <span class="o">!</span> <span class="nc">SetConnection</span><span class="o">(</span><span class="n">handle</span><span class="o">)</span>
+</span><span class='line'>    <span class="n">client</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We need to also modify our client&#8217;s myReceive partial function to process the SetConnection message</p>
+
+<figure class='code'><figcaption><span>myReceive3</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'>  <span class="k">def</span> <span class="n">myReceive</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">SetConnection</span><span class="o">(</span><span class="n">connection</span><span class="k">:</span> <span class="kt">Connection</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="k">this</span><span class="o">.</span><span class="n">connection</span> <span class="k">=</span> <span class="n">connection</span>
+</span><span class='line'>    <span class="c1">// Rest of the stuff remains the same.</span>
+</span><span class='line'>    <span class="o">.....</span>
+</span><span class='line'>    <span class="o">.....</span>
+</span><span class='line'>  <span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>Using the client.</h4>
+
+<p>To run our Main we need to make sure that we have a local instance of Redis running on port 6379. We set a bunch of keys to some values and later get these values and verify that they match our expectation. Some points to note:</p>
+
+<ul>
+<li>We make liberal use of zip and unzip for the purpose of keeping the keys, values and the results in tuples so that we can print them out together. The examples might look a lot more complicated because of this.</li>
+<li>Since the client is an actor, the messages sent to it are serialized . Thus we do not have to worry about race conditions such as processing a get request before a corresponding set request (assuming that the code using the client does not make such a mistake).</li>
+<li>We use the mapTo syntax to coerce our results to the expected type. Maybe there should be a wrapper object which does this for us.</li>
+<li>We add success and failure handlers to the futures we receive from the RedisClient actor. We could have also used the onComplete handler instead. Note that a different thread might run these handlers. Here we merely print our results, but we need to be careful of more dangerous side effects like mutations. You are left on your own to deal with the Java Memory Model if you want to modify vars in these handlers. A safe way to do such a thing would be to serialize access through Actors or some other form of mutual exclusion like locking (Oh Noos).</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>Main</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">Main</span> <span class="k">extends</span> <span class="nc">App</span> <span class="o">{</span>
+</span><span class='line'>  <span class="c1">// We need an ActorSystem to host our application in.</span>
+</span><span class='line'>  <span class="k">implicit</span> <span class="k">val</span> <span class="n">system</span> <span class="k">=</span> <span class="nc">ActorSystem</span><span class="o">()</span>
+</span><span class='line'>  <span class="c1">// Create and start an IOBridge.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">ioBridge</span> <span class="k">=</span> <span class="nc">IOExtension</span><span class="o">(</span><span class="n">system</span><span class="o">).</span><span class="n">ioBridge</span><span class="o">()</span>
+</span><span class='line'>  <span class="c1">// The futures returned by the ask pattern will time out based on this implicit timeout.</span>
+</span><span class='line'>  <span class="k">implicit</span> <span class="k">val</span> <span class="n">timeout</span> <span class="k">=</span> <span class="nc">Timeout</span><span class="o">(</span><span class="mi">5</span> <span class="n">seconds</span><span class="o">)</span>
+</span><span class='line'> <span class="c1">// Our Redis client.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">client</span> <span class="k">=</span> <span class="nc">RedisClient</span><span class="o">(</span><span class="s">&quot;127.0.0.1&quot;</span><span class="o">,</span> <span class="mi">6379</span><span class="o">,</span> <span class="n">ioBridge</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// Get a list of keys and values to set in Redis.</span>
+</span><span class='line'>  <span class="c1">// keys = hello1, hello2, ...</span>
+</span><span class='line'>  <span class="c1">// values = world1, world2, ...</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">numKeys</span> <span class="k">=</span> <span class="mi">3</span>
+</span><span class='line'>  <span class="k">val</span> <span class="o">(</span><span class="n">keys</span><span class="o">,</span> <span class="n">values</span><span class="o">)</span> <span class="k">=</span> <span class="o">(</span><span class="mi">1</span> <span class="n">to</span> <span class="n">numKeys</span> <span class="n">map</span> <span class="o">{</span> <span class="n">num</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="s">&quot;hello&quot;</span> <span class="o">+</span> <span class="n">num</span><span class="o">,</span> <span class="s">&quot;world&quot;</span> <span class="o">+</span> <span class="n">num</span><span class="o">)</span> <span class="o">}).</span><span class="n">unzip</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// Set the keys in Redis. We store the Futures with the keys and values to print them later.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">writeResults</span> <span class="k">=</span> <span class="n">keys</span> <span class="n">zip</span> <span class="n">values</span> <span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="k">=&gt;</span>
+</span><span class='line'>    <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">,</span> <span class="o">(</span><span class="n">client</span> <span class="o">?</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)).</span><span class="n">mapTo</span><span class="o">[</span><span class="kt">Boolean</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="n">writeResults</span> <span class="n">foreach</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">,</span> <span class="n">result</span><span class="o">)</span> <span class="k">=&gt;</span>
+</span><span class='line'>    <span class="n">result</span> <span class="n">onSuccess</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="n">someBoolean</span> <span class="k">if</span> <span class="n">someBoolean</span> <span class="o">==</span> <span class="kc">true</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Set &quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot; to value &quot;</span> <span class="o">+</span> <span class="n">value</span><span class="o">)</span>
+</span><span class='line'>      <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Failed to set key &quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot; to value &quot;</span> <span class="o">+</span> <span class="n">value</span><span class="o">)</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="n">result</span> <span class="n">onFailure</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="n">t</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Failed to set key &quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot; to value &quot;</span> <span class="o">+</span> <span class="n">value</span> <span class="o">+</span> <span class="s">&quot; : &quot;</span> <span class="o">+</span> <span class="n">t</span><span class="o">)</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// Get the keys from Redis. Store the keys with the Futures to print them later.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">readResults</span> <span class="k">=</span> <span class="n">keys</span> <span class="n">map</span> <span class="o">{</span> <span class="n">key</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">client</span><span class="o">.</span><span class="n">ask</span><span class="o">(</span><span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="o">)).</span><span class="n">mapTo</span><span class="o">[</span><span class="kt">String</span><span class="o">])</span> <span class="o">}</span>
+</span><span class='line'>  <span class="n">readResults</span> <span class="n">zip</span> <span class="n">values</span> <span class="n">foreach</span> <span class="o">{</span> <span class="k">case</span> <span class="o">((</span><span class="n">key</span><span class="o">,</span> <span class="n">result</span><span class="o">),</span> <span class="n">expectedValue</span><span class="o">)</span> <span class="k">=&gt;</span>
+</span><span class='line'>    <span class="n">result</span><span class="o">.</span><span class="n">onSuccess</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="n">resultString</span> <span class="k">=&gt;</span>
+</span><span class='line'>        <span class="n">println</span><span class="o">(</span><span class="s">&quot;Got a result for &quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;: &quot;</span><span class="o">+</span> <span class="n">resultString</span><span class="o">)</span>
+</span><span class='line'>        <span class="n">assert</span><span class="o">(</span><span class="n">resultString</span> <span class="o">==</span> <span class="n">expectedValue</span><span class="o">)</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="n">result</span><span class="o">.</span><span class="n">onFailure</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="n">t</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Got some exception &quot;</span> <span class="o">+</span> <span class="n">t</span><span class="o">)</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That wraps up a rather long post. To end things I want to talk about a few things I learnt about Futures and Promises from this exercise:</p>
+
+<ul>
+<li>Futures and Promises make it very easy to implement asynchronous code that is still easy to read.</li>
+<li>One has to be careful of the code they execute in the onComplete handlers of a future, since they execute in unknown threads.</li>
+<li>When you want to send the result of a Future to the sender of an Actor - the pipe pattern is a huge help. This internally adds a completion handler to the Future and onComplete sends the results to the sender without blocking. The much more verbose and error-pronse alternative is to keep a reference to the current sender and to add the onComplete handlers yourself. More can be found <a href="http://stackoverflow.com/questions/12455764/akka-avoiding-wrapping-future-when-responding-to-non-actor-code">here</a></li>
+<li>Though not shown here futures are easy to compose - so to get a result from say concatenating three separate Redis GET results would be pretty easy.</li>
+<li>The order of completion of promises does not dictate the order in which the onComplete handlers on the attached futures are executed. For eg if you run our Main, you might see results printed in a weird order:</li>
+</ul>
+
+
+<pre>
+Got a result for hello1: world1
+Got a result for hello2: world2
+Got a result for hello3: world3
+Set hello2 to value world2
+Set hello1 to value world1
+Set hello3 to value world3
+</pre>
+
+
+<p>INSTEAD OF:</p>
+
+<pre>
+Set hello1 to value world1
+Set hello2 to value world2
+Set hello3 to value world3
+Got a result for hello1: world1
+Got a result for hello2: world2
+Got a result for hello3: world3
+</pre>
+
+
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Rajiv Kurian</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-25T17:52:00-08:00" pubdate data-updated="true">Dec 25<span>th</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/actors/'>Actors</a>, <a class='category' href='/blog/categories/akka/'>Akka</a>, <a class='category' href='/blog/categories/futures/'>Futures</a>, <a class='category' href='/blog/categories/promises/'>Promises</a>, <a class='category' href='/blog/categories/scala/'>Scala</a>, <a class='category' href='/blog/categories/spray/'>Spray</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://RajivKurian.github.com/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/" data-via="" data-counturl="http://RajivKurian.github.com/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/12/23/overriding-vals-in-traits/" title="Previous Post: Overriding vals in traits.">&laquo; Overriding vals in traits.</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/" title="Next Post: Remote controlled html5 presentation with a Go backend - Part 1.">Remote controlled html5 presentation with a Go backend - Part 1. &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Remote controlled html5 presentation with a Go backend - Part 3.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Remote controlled html5 presentation with a Go backend - Part 2.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Remote controlled html5 presentation with a Go backend - Part 1.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/">A simple Redis client using Spray io, actors, futures and promises.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/23/overriding-vals-in-traits/">Overriding vals in traits.</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+<section>
+  <h1>About Me</h1>
+  <p>I work as a software engineer primarily writing backend services.</p>
+  <p> At my datytime job I primarily work on a Scala and Akka stack. In my spare time I like playing with languages such as Go. My topics of interest include concurrency and distributed systems.</p>
+</section>
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Rajiv Kurian -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'rajivsblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://RajivKurian.github.com/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/';
+        var disqus_url = 'http://RajivKurian.github.com/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

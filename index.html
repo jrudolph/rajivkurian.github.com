@@ -1,1 +1,456 @@
-My Octopress Page is coming soon &hellip;
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Rajiv's Blog</title>
+  <meta name="author" content="Rajiv Kurian">
+
+  
+  <meta name="description" content="What is this? This is the third part of a three part series on building a remote-controlled presentation app in Go. Also see Part 1 and Part 2. The &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://RajivKurian.github.com/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="Rajiv's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-37425728-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Rajiv's Blog</a></h1>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:RajivKurian.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div class="blog-index">
+  
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Remote Controlled Html5 Presentation With a Go Backend - Part 3.</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-09T01:27:00-08:00" pubdate data-updated="true">Jan 9<span>th</span>, 2013</time>
+        
+         | <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h4>What is this?</h4>
+
+<p>This is the third part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Part 1</a> and <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Part 2</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 3.</h4>
+
+<p>We built a working server in parts 1 and 2. Our server was also capable of serving static files. In this part we will use the excellent <a href="https://github.com/hakimel/reveal.js">reveal.js</a> library for the actual presentation. I simply cloned https://github.com/hakimel/reveal.js into the directory for my go package and made edits to the index.html file to get a working presentation client.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Remote Controlled Html5 Presentation With a Go Backend - Part 2.</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-09T00:17:00-08:00" pubdate data-updated="true">Jan 9<span>th</span>, 2013</time>
+        
+         | <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h4>What is this?</h4>
+
+<p>This is the second part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Part 1</a> and <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Part 3</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 2.</h4>
+
+<p>In Part 1 we implemented a websocket connection that would let a client send and receive our protocol messages. We saw sporadic references to a hub that was supposed to manage the communication between remote-controller clients and presentation clients. This hub needs to:</p>
+
+<ol>
+<li>Have a way for presentation connections to register or unregister themselves.</li>
+<li>Have a way to broadcast messages from remote-controller clients to presentation clients.</li>
+</ol>
+
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Remote Controlled Html5 Presentation With a Go Backend - Part 1.</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-08T22:38:00-08:00" pubdate data-updated="true">Jan 8<span>th</span>, 2013</time>
+        
+         | <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h4>What is this?</h4>
+
+<p>This is the first part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Part 2</a> and <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Part 3</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 1.</h4>
+
+<p>At work I am busy writing the connection layer for one of our backend services. We are mainly looking at Scala libraries like <a href="http://twitter.github.com/finagle/">Finagle</a> and <a href="http://spray.io">Spray.io</a>. I spent some time last year looking at <a href="http://golang.org">Go</a>, especially it&#8217;s concurrency facilities. Playing with all the Scala networking libraries, I was curious to see how it would be to write a server in Go. Go comes with a surprisingly complete standard library. Most other things one needs are also available as packages. For a thorough introduction to Go&#8217;s networking libraries please see <a href="http://jan.newmarch.name/go/">Network programming with Go</a>. <a href="http://gary.beagledreams.com/page/go-websocket-chat.html">Here</a> is a great websocket-chat demo that I looked at to understand some Go patterns.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/">A Simple Redis Client Using Spray Io, Actors, Futures and Promises.</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-25T17:52:00-08:00" pubdate data-updated="true">Dec 25<span>th</span>, 2012</time>
+        
+         | <a href="/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p><em>Note:</em> The code for this post can be found <a href="https://github.com/RajivKurian/toy-redis-client">here</a></p>
+
+<p>I recently wrote a toy <a href="http://redis.io/">Redis</a> client (only supports gets and sets) to experiment with the Scala 2.10 concurrency features. I was especially interested in playing with Futures and Promises and to see how they combine with Actors.</p>
+
+<p>I ended up using <a href="http://spray.io">Spray</a> for all the networking needs. According to their website Spray&#8217;s API is asynchronous, non-blocking and is based on Actors and Futures. It uses Java NIO internally like <a href="http://netty.io">Netty</a>. The <a href="http://spray.io/documentation/spray-io/">documentation</a> is pretty exhaustive and had answers to most questions that I had.</p>
+
+<p>We start with our build.sbt file to get all the dependencies in order.</p>
+
+<figure class='code'><figcaption><span>build.sbt</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="n">name</span> <span class="o">:=</span> <span class="s">&quot;redis-actor&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">version</span> <span class="o">:=</span> <span class="s">&quot;1.0&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">scalaVersion</span> <span class="o">:=</span> <span class="s">&quot;2.10.0&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">scalacOptions</span> <span class="o">++=</span> <span class="nc">Seq</span><span class="o">(</span><span class="s">&quot;-unchecked&quot;</span><span class="o">,</span> <span class="s">&quot;-deprecation&quot;</span><span class="o">,</span> <span class="s">&quot;-encoding&quot;</span><span class="o">,</span> <span class="s">&quot;utf8&quot;</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Typesafe.</span>
+</span><span class='line'><span class="n">resolvers</span> <span class="o">+=</span> <span class="s">&quot;Typesafe Repository&quot;</span> <span class="n">at</span> <span class="s">&quot;http://repo.typesafe.com/typesafe/releases/&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Spray.</span>
+</span><span class='line'><span class="n">resolvers</span> <span class="o">+=</span> <span class="s">&quot;spray repo&quot;</span> <span class="n">at</span> <span class="s">&quot;http://repo.spray.io&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">libraryDependencies</span> <span class="o">+=</span> <span class="s">&quot;com.typesafe.akka&quot;</span> <span class="o">%%</span> <span class="s">&quot;akka-actor&quot;</span> <span class="o">%</span> <span class="s">&quot;2.1.0&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">libraryDependencies</span> <span class="o">+=</span> <span class="s">&quot;io.spray&quot;</span> <span class="o">%</span> <span class="s">&quot;spray-io&quot;</span> <span class="o">%</span> <span class="s">&quot;1.1-M7&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Our Redis Client extends Spray IOClient. From the Spray documentation: The IOClient is a simple actor base class for client-side networking components. It builds upon an IOBridge and provides client-side connection management. Sounds good to me.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2012/12/23/overriding-vals-in-traits/">Overriding Vals in Traits.</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-23T21:59:00-08:00" pubdate data-updated="true">Dec 23<span>rd</span>, 2012</time>
+        
+         | <a href="/blog/2012/12/23/overriding-vals-in-traits/#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>When implementing traits we often want to override the vals declared in said trait.</p>
+
+<p>One way to achieve this is to treat the val as a field of the constructor. A contrived example is:</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2012/12/23/overriding-vals-in-traits/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  <div class="pagination">
+    
+    <a href="/blog/archives">Blog Archives</a>
+    
+  </div>
+</div>
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Remote controlled html5 presentation with a Go backend - Part 3.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Remote controlled html5 presentation with a Go backend - Part 2.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Remote controlled html5 presentation with a Go backend - Part 1.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/">A simple Redis client using Spray io, actors, futures and promises.</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/23/overriding-vals-in-traits/">Overriding vals in traits.</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+<section>
+  <h1>About Me</h1>
+  <p>I work as a software engineer primarily writing backend services.</p>
+  <p> At my datytime job I primarily work on a Scala and Akka stack. In my spare time I like playing with languages such as Go. My topics of interest include concurrency and distributed systems.</p>
+</section>
+
+  
+</aside>
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Rajiv Kurian -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'rajivsblog';
+      
+        
+        var disqus_script = 'count.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

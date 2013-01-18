@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: traits | Rajiv's Blog]]></title>
+  <link href="http://RajivKurian.github.com/blog/categories/traits/atom.xml" rel="self"/>
+  <link href="http://RajivKurian.github.com/"/>
+  <updated>2013-01-17T23:28:14-08:00</updated>
+  <id>http://RajivKurian.github.com/</id>
+  <author>
+    <name><![CDATA[Rajiv Kurian]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Overriding vals in traits.]]></title>
+    <link href="http://RajivKurian.github.com/blog/2012/12/23/overriding-vals-in-traits/"/>
+    <updated>2012-12-23T21:59:00-08:00</updated>
+    <id>http://RajivKurian.github.com/blog/2012/12/23/overriding-vals-in-traits</id>
+    <content type="html"><![CDATA[<p>When implementing traits we often want to override the vals declared in said trait.</p>
+
+<p>One way to achieve this is to treat the val as a field of the constructor. A contrived example is:</p>
+
+<!-- more -->
+
+
+<p><div><script src='https://gist.github.com/4246797.js'></script>
+<noscript><pre><code>trait Foo {
+  val a: Int
+  def printA = println(a)
+}
+
+class Bar(val a: Int) extends Foo
+
+// User Bar like this:
+
+val aBar = new Bar(42)
+aBar.printA</code></pre></noscript></div>
+</p>
+]]></content>
+  </entry>
+  
+</feed>

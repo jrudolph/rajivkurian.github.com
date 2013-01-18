@@ -1,0 +1,1345 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Rajiv's Blog]]></title>
+  <link href="http://RajivKurian.github.com/atom.xml" rel="self"/>
+  <link href="http://RajivKurian.github.com/"/>
+  <updated>2013-01-17T23:28:14-08:00</updated>
+  <id>http://RajivKurian.github.com/</id>
+  <author>
+    <name><![CDATA[Rajiv Kurian]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Remote controlled html5 presentation with a Go backend - Part 3.]]></title>
+    <link href="http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/"/>
+    <updated>2013-01-09T01:27:00-08:00</updated>
+    <id>http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3</id>
+    <content type="html"><![CDATA[<h4>What is this?</h4>
+
+<p>This is the third part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Part 1</a> and <a href="http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Part 2</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 3.</h4>
+
+<p>We built a working server in parts 1 and 2. Our server was also capable of serving static files. In this part we will use the excellent <a href="https://github.com/hakimel/reveal.js">reveal.js</a> library for the actual presentation. I simply cloned https://github.com/hakimel/reveal.js into the directory for my go package and made edits to the index.html file to get a working presentation client.</p>
+
+<!-- more -->
+
+
+<p>We will use the default presentation that comes with reveal.js and add a layer to control it&#8217;s behavior. Reveal.js exposes it&#8217;s API through a Reveal object in JavaScript. We can use this object to move our presentation. It also fires a &#8216;ready&#8217; event when the presentation is ready to start navigating. We will listen for this event and in response connect to our server and:</p>
+
+<ol>
+<li>Register as presentation &#8220;123&#8221;. In part 2 this is the only presentation id that we support.</li>
+<li>Listen to messages over our websocket connection and react by moving the slides accordingly.</li>
+</ol>
+
+
+<figure class='code'><figcaption><span>index.html</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+</pre></td><td class='code'><pre><code class='html'><span class='line'><span class="c">&lt;!-- a bunch of other stuff that comes in reveal.js here --&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;script&gt;</span>
+</span><span class='line'>      <span class="c1">// This is all reveal.js configuration code.</span>
+</span><span class='line'>      <span class="c1">// Full list of configuration options available here:</span>
+</span><span class='line'>      <span class="c1">// https://github.com/hakimel/reveal.js#configuration</span>
+</span><span class='line'>      <span class="nx">Reveal</span><span class="p">.</span><span class="nx">initialize</span><span class="p">({</span>
+</span><span class='line'>        <span class="nx">controls</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span>
+</span><span class='line'>        <span class="nx">progress</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span>
+</span><span class='line'>        <span class="nx">history</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span>
+</span><span class='line'>        <span class="nx">center</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="nx">theme</span><span class="o">:</span> <span class="nx">Reveal</span><span class="p">.</span><span class="nx">getQueryHash</span><span class="p">().</span><span class="nx">theme</span><span class="p">,</span> <span class="c1">// available themes are in /css/theme</span>
+</span><span class='line'>        <span class="nx">transition</span><span class="o">:</span> <span class="nx">Reveal</span><span class="p">.</span><span class="nx">getQueryHash</span><span class="p">().</span><span class="nx">transition</span> <span class="o">||</span> <span class="s1">&#39;default&#39;</span><span class="p">,</span> <span class="c1">// default/cube/page/concave/zoom/linear/none</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="c1">// Optional libraries used to extend on reveal.js</span>
+</span><span class='line'>        <span class="nx">dependencies</span><span class="o">:</span> <span class="p">[</span>
+</span><span class='line'>          <span class="p">{</span> <span class="nx">src</span><span class="o">:</span> <span class="s1">&#39;lib/js/classList.js&#39;</span><span class="p">,</span> <span class="nx">condition</span><span class="o">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="o">!</span><span class="nb">document</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">classList</span><span class="p">;</span> <span class="p">}</span> <span class="p">},</span>
+</span><span class='line'>          <span class="p">{</span> <span class="nx">src</span><span class="o">:</span> <span class="s1">&#39;plugin/markdown/showdown.js&#39;</span><span class="p">,</span> <span class="nx">condition</span><span class="o">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="o">!!</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span> <span class="s1">&#39;[data-markdown]&#39;</span> <span class="p">);</span> <span class="p">}</span> <span class="p">},</span>
+</span><span class='line'>          <span class="p">{</span> <span class="nx">src</span><span class="o">:</span> <span class="s1">&#39;plugin/markdown/markdown.js&#39;</span><span class="p">,</span> <span class="nx">condition</span><span class="o">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="o">!!</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span> <span class="s1">&#39;[data-markdown]&#39;</span> <span class="p">);</span> <span class="p">}</span> <span class="p">},</span>
+</span><span class='line'>          <span class="p">{</span> <span class="nx">src</span><span class="o">:</span> <span class="s1">&#39;plugin/highlight/highlight.js&#39;</span><span class="p">,</span> <span class="nx">async</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span> <span class="nx">callback</span><span class="o">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span> <span class="nx">hljs</span><span class="p">.</span><span class="nx">initHighlightingOnLoad</span><span class="p">();</span> <span class="p">}</span> <span class="p">},</span>
+</span><span class='line'>          <span class="p">{</span> <span class="nx">src</span><span class="o">:</span> <span class="s1">&#39;plugin/zoom-js/zoom.js&#39;</span><span class="p">,</span> <span class="nx">async</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span> <span class="nx">condition</span><span class="o">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="o">!!</span><span class="nb">document</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">classList</span><span class="p">;</span> <span class="p">}</span> <span class="p">},</span>
+</span><span class='line'>          <span class="p">{</span> <span class="nx">src</span><span class="o">:</span> <span class="s1">&#39;plugin/notes/notes.js&#39;</span><span class="p">,</span> <span class="nx">async</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span> <span class="nx">condition</span><span class="o">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="o">!!</span><span class="nb">document</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">classList</span><span class="p">;</span> <span class="p">}</span> <span class="p">}</span>
+</span><span class='line'>          <span class="c1">// { src: &#39;plugin/remotes/remotes.js&#39;, async: true, condition: function() { return !!document.body.classList; } }</span>
+</span><span class='line'>        <span class="p">]</span>
+</span><span class='line'>      <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="c1">// Our stuff starts here.</span>
+</span><span class='line'>      <span class="kd">var</span> <span class="nx">conn</span><span class="p">;</span>  <span class="c1">// Our websocket connection.</span>
+</span><span class='line'>      <span class="nx">Reveal</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span> <span class="s1">&#39;ready&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">event</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="nb">window</span><span class="p">[</span><span class="s2">&quot;WebSocket&quot;</span><span class="p">])</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">conn</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">WebSocket</span><span class="p">(</span><span class="s2">&quot;ws://localhost:8080/ws&quot;</span><span class="p">);</span>
+</span><span class='line'>          <span class="nx">conn</span><span class="p">.</span><span class="nx">onclose</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">evt</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Connection closed.&quot;</span><span class="p">)</span>
+</span><span class='line'>          <span class="p">}</span>
+</span><span class='line'>          <span class="nx">conn</span><span class="p">.</span><span class="nx">onopen</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">evt</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="nx">conn</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s2">&quot;joinPresentation:123&quot;</span><span class="p">)</span>
+</span><span class='line'>          <span class="p">}</span>
+</span><span class='line'>          <span class="nx">conn</span><span class="p">.</span><span class="nx">onmessage</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">evt</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="kd">var</span> <span class="nx">msg</span> <span class="o">=</span> <span class="nx">evt</span><span class="p">.</span><span class="nx">data</span>
+</span><span class='line'>            <span class="k">switch</span> <span class="p">(</span><span class="nx">msg</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>              <span class="k">case</span> <span class="s2">&quot;left&quot;</span><span class="o">:</span>
+</span><span class='line'>              <span class="nx">Reveal</span><span class="p">.</span><span class="nx">left</span><span class="p">();</span>
+</span><span class='line'>              <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>              <span class="k">case</span> <span class="s2">&quot;right&quot;</span><span class="o">:</span>
+</span><span class='line'>              <span class="nx">Reveal</span><span class="p">.</span><span class="nx">right</span><span class="p">();</span>
+</span><span class='line'>              <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>              <span class="k">case</span> <span class="s2">&quot;up&quot;</span><span class="o">:</span>
+</span><span class='line'>              <span class="nx">Reveal</span><span class="p">.</span><span class="nx">up</span><span class="p">();</span>
+</span><span class='line'>              <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>              <span class="k">case</span> <span class="s2">&quot;down&quot;</span><span class="o">:</span>
+</span><span class='line'>              <span class="nx">Reveal</span><span class="p">.</span><span class="nx">down</span><span class="p">();</span>
+</span><span class='line'>              <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>              <span class="k">default</span><span class="o">:</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Unknown msg &quot;</span> <span class="o">+</span> <span class="nx">msg</span><span class="p">)</span>
+</span><span class='line'>            <span class="p">}</span>
+</span><span class='line'>          <span class="p">}</span>
+</span><span class='line'>        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;This browser does not support websockets.&quot;</span><span class="p">)</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>      <span class="p">});</span>
+</span><span class='line'>    <span class="nt">&lt;/script&gt;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nt">&lt;/body&gt;</span>
+</span><span class='line'><span class="nt">&lt;/html&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Next we need to write our remote-controller client. I ripped off the design of the controller on the reveal.js homepage and made a bigger, uglier and less semantic version of it on a file called remote.html. I&#8217;ll spare you the HTML and CSS horror (see the <a href="https://github.com/RajivKurian/remote-presentation/blob/master/remote.html">source</a> if you dare). I used this <a href="http://css-tricks.com/snippets/css/css-triangle/">article</a> to draw CSS triangles. I also copied the color of the controls and the radial gradient from reveal.js.</p>
+
+<p><img src="http://RajivKurian.github.com/images/remote-control.png"></p>
+
+<p>I&#8217;ll focus on the javascript instead. Like before we connect to our server and:</p>
+
+<ol>
+<li>Register as a remote-controller for presentation &#8220;123&#8221;.</li>
+<li>Listen to onclick events on our control DOM nodes and send corresponding protocol messages to the server.</li>
+</ol>
+
+
+<p>Note that we do not need to listen to messages from the server since this is a remote-controller.</p>
+
+<figure class='code'><figcaption><span>remote.html</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+</pre></td><td class='code'><pre><code class='html'><span class='line'><span class="nt">&lt;script </span><span class="na">type=</span><span class="s">&quot;text/javascript&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">conn</span><span class="p">;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">isSocketOpen</span> <span class="o">=</span> <span class="kc">false</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">$</span><span class="p">(</span><span class="nb">document</span><span class="p">).</span><span class="nx">ready</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;document is ready&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">up</span> <span class="o">=</span> <span class="nx">$</span><span class="p">(</span><span class="s2">&quot;#up&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">down</span> <span class="o">=</span> <span class="nx">$</span><span class="p">(</span><span class="s2">&quot;#down&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">left</span> <span class="o">=</span> <span class="nx">$</span><span class="p">(</span><span class="s2">&quot;#left&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">right</span> <span class="o">=</span> <span class="nx">$</span><span class="p">(</span><span class="s2">&quot;#right&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="nx">up</span><span class="p">.</span><span class="nx">click</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">sendMessage</span><span class="p">(</span><span class="s2">&quot;up&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">});</span>
+</span><span class='line'>  <span class="nx">down</span><span class="p">.</span><span class="nx">click</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">sendMessage</span><span class="p">(</span><span class="s2">&quot;down&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">});</span>
+</span><span class='line'>  <span class="nx">left</span><span class="p">.</span><span class="nx">click</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">sendMessage</span><span class="p">(</span><span class="s2">&quot;left&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">});</span>
+</span><span class='line'>  <span class="nx">right</span><span class="p">.</span><span class="nx">click</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">sendMessage</span><span class="p">(</span><span class="s2">&quot;right&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">});</span>
+</span><span class='line'><span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">function</span> <span class="nx">sendMessage</span><span class="p">(</span><span class="nx">direction</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;direction is &quot;</span> <span class="o">+</span> <span class="nx">direction</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">conn</span> <span class="o">||</span> <span class="o">!</span><span class="nx">isSocketOpen</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="nx">conn</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">direction</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">$</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="nb">window</span><span class="p">[</span><span class="s2">&quot;WebSocket&quot;</span><span class="p">])</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">conn</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">WebSocket</span><span class="p">(</span><span class="s2">&quot;ws://localhost:8080/ws&quot;</span><span class="p">);</span>
+</span><span class='line'>    <span class="nx">conn</span><span class="p">.</span><span class="nx">onclose</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">evt</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Connection lost&quot;</span><span class="p">);</span>
+</span><span class='line'>    <span class="nx">isSocketOpen</span> <span class="o">=</span> <span class="kc">false</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="nx">conn</span><span class="p">.</span><span class="nx">onopen</span> <span class="o">=</span><span class="kd">function</span><span class="p">(</span><span class="nx">evt</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">isSocketOpen</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+</span><span class='line'>      <span class="nx">conn</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s2">&quot;joinRemote:123&quot;</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="nx">conn</span><span class="p">.</span><span class="nx">onmessage</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">evt</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Should not be getting any msges since this is a remote.&quot;</span> <span class="o">+</span> <span class="nx">evt</span><span class="p">.</span><span class="nx">data</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;This browser does not support websockets&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">});</span>
+</span><span class='line'><span class="nt">&lt;/script&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><em>Yes I log errors to the console!</em> We now have all the pieces necessary to run the demo. You can use the remote-controller (possibly on your mobile phone) to navigate the reveal.js presentation in all of it&#8217;s &#8220;transitiony&#8221; glory.</p>
+
+<p>This brings the three part series to an end. I thoroughly enjoyed writing this demo and showing it to my friends. This is the first server I wrote in Go and it was a surprisingly pleasant experience. I might write another article about my experience with Go and compare it to Scala.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Remote controlled html5 presentation with a Go backend - Part 2.]]></title>
+    <link href="http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/"/>
+    <updated>2013-01-09T00:17:00-08:00</updated>
+    <id>http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2</id>
+    <content type="html"><![CDATA[<h4>What is this?</h4>
+
+<p>This is the second part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Part 1</a> and <a href="http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Part 3</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 2.</h4>
+
+<p>In Part 1 we implemented a websocket connection that would let a client send and receive our protocol messages. We saw sporadic references to a hub that was supposed to manage the communication between remote-controller clients and presentation clients. This hub needs to:</p>
+
+<ol>
+<li>Have a way for presentation connections to register or unregister themselves.</li>
+<li>Have a way to broadcast messages from remote-controller clients to presentation clients.</li>
+</ol>
+
+
+<!-- more -->
+
+
+<p>Let&#8217;s look at the implementation. As always we start off with our imports. A hub contains a map with a Connection key (covered in <a href="http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/">Part 1</a>) and a boolean value. Go does not have a set data structure in the standard library. Using a map seems to be a standard way of getting it to work like a set. We use this map/set to keep a track of the hub&#8217;s connections. We have three channels that are used to send the hub messages. We define register/unregister channels that are used to add/remove connections from the hub. We also have a remote channel that can be used by a remote-controller client to broadcast messages to the presentation clients on this hub. Note: I use &#8220;client&#8221; and &#8220;connection&#8221; interchangeably since each connection actually represents a client.</p>
+
+<figure class='code'><figcaption><span>hub.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">package</span> <span class="n">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;code.google.com/p/go.net/websocket&quot;</span>
+</span><span class='line'>  <span class="s">&quot;flag&quot;</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">type</span> <span class="n">Hub</span> <span class="k">struct</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">presentations</span> <span class="k">map</span><span class="p">[</span><span class="n">Connection</span><span class="p">]</span><span class="n">bool</span>
+</span><span class='line'>  <span class="n">register</span>      <span class="k">chan</span> <span class="n">Connection</span>
+</span><span class='line'>  <span class="n">unregister</span>    <span class="k">chan</span> <span class="n">Connection</span>
+</span><span class='line'>  <span class="n">remote</span>        <span class="k">chan</span> <span class="n">PresentationMsg</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Let&#8217;s add some methods to our Hub so that our connections can call these methods to interact with a hub instead of sending it messages on it&#8217;s channels. This will let us transparently change the implementation later.</p>
+
+<figure class='code'><figcaption><span>hub.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">h</span> <span class="p">*</span><span class="n">Hub</span><span class="p">)</span> <span class="n">registerConnection</span><span class="p">(</span><span class="n">c</span> <span class="n">Connection</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">h</span><span class="p">.</span><span class="n">register</span> <span class="p">&lt;-</span> <span class="n">c</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">h</span> <span class="p">*</span><span class="n">Hub</span><span class="p">)</span> <span class="n">unregisterConnection</span><span class="p">(</span><span class="n">c</span> <span class="n">Connection</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">h</span><span class="p">.</span><span class="n">unregister</span> <span class="p">&lt;-</span> <span class="n">c</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">h</span> <span class="p">*</span><span class="n">Hub</span><span class="p">)</span> <span class="n">sendMsg</span><span class="p">(</span><span class="n">msg</span> <span class="n">PresentationMsg</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">h</span><span class="p">.</span><span class="n">remote</span> <span class="p">&lt;-</span> <span class="n">msg</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now that we have a way to receive and handle messages. We define a run method that will accomplish this. Later when using a hub we need to make sure that each active hub&#8217;s run method is running as a go routine so that it accepts and processes messages sent to it. Register messages add a connection to the hub and unregister messages remove them. Remote messages come from a remote-controller client and are broadcast to presentation clients. Note that multiple remote-controller clients could potentially connect to the same hub and send messages messing things up. We could ensure that only one remote-control client connects to a hub but for the purpose of the demo we will live with this limitation.</p>
+
+<figure class='code'><figcaption><span>hub.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">h</span> <span class="p">*</span><span class="n">Hub</span><span class="p">)</span> <span class="n">run</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">select</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">case</span> <span class="n">c</span> <span class="p">:=</span> <span class="p">&lt;-</span><span class="n">h</span><span class="p">.</span><span class="n">register</span><span class="p">:</span>
+</span><span class='line'>      <span class="n">h</span><span class="p">.</span><span class="n">presentations</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="p">=</span> <span class="n">true</span>
+</span><span class='line'>    <span class="k">case</span> <span class="n">c</span> <span class="p">:=</span> <span class="p">&lt;-</span><span class="n">h</span><span class="p">.</span><span class="n">unregister</span><span class="p">:</span>
+</span><span class='line'>      <span class="n">delete</span><span class="p">(</span><span class="n">h</span><span class="p">.</span><span class="n">presentations</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">case</span> <span class="n">msg</span> <span class="p">:=</span> <span class="p">&lt;-</span><span class="n">h</span><span class="p">.</span><span class="n">remote</span><span class="p">:</span>
+</span><span class='line'>      <span class="k">for</span> <span class="n">p</span> <span class="p">:=</span> <span class="k">range</span> <span class="n">h</span><span class="p">.</span><span class="n">presentations</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">err</span> <span class="p">:=</span> <span class="n">p</span><span class="p">.</span><span class="n">Write</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span> <span class="c1">// The connection will clean itself if there is a write error.</span>
+</span><span class='line'>        <span class="k">if</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>          <span class="n">delete</span><span class="p">(</span><span class="n">h</span><span class="p">.</span><span class="n">presentations</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Lets create a global map of hubs where hubs are stored by their presentation ids. Let&#8217;s also create a single hub for our demo.</p>
+
+<figure class='code'><figcaption><span>hub.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">hubMap</span> <span class="p">=</span> <span class="nb">make</span><span class="p">(</span><span class="k">map</span><span class="p">[</span><span class="nb">string</span><span class="p">]</span><span class="n">Hub</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">var</span> <span class="n">h</span> <span class="p">=</span> <span class="n">Hub</span><span class="p">{</span>
+</span><span class='line'>  <span class="n">presentations</span><span class="p">:</span> <span class="nb">make</span><span class="p">(</span><span class="k">map</span><span class="p">[</span><span class="n">Connection</span><span class="p">]</span><span class="n">bool</span><span class="p">),</span>
+</span><span class='line'>  <span class="n">register</span><span class="p">:</span>      <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="n">Connection</span><span class="p">),</span>
+</span><span class='line'>  <span class="n">unregister</span><span class="p">:</span>    <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="n">Connection</span><span class="p">),</span>
+</span><span class='line'>  <span class="n">remote</span><span class="p">:</span>        <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="n">PresentationMsg</span><span class="p">),</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Let&#8217;s add our hub to the hub map with a presentation id of &#8220;123&#8221;. We need to run go routines for each of our hubs (only 1 for this demo) to make sure they listen to messages sent to them. Finally we set up a HTTP and websocket server on port 8080. The HTTP server also serves all the files required for our web clients.</p>
+
+<figure class='code'><figcaption><span>hub.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">addr</span> <span class="p">=</span> <span class="n">flag</span><span class="p">.</span><span class="n">String</span><span class="p">(</span><span class="s">&quot;addr&quot;</span><span class="p">,</span> <span class="s">&quot;:8080&quot;</span><span class="p">,</span> <span class="s">&quot;http service address&quot;</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">flag</span><span class="p">.</span><span class="n">Parse</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// For this demo we have a single id that presentations and remotes can connect to.</span>
+</span><span class='line'>  <span class="n">hubMap</span><span class="p">[</span><span class="s">&quot;123&quot;</span><span class="p">]</span> <span class="p">=</span> <span class="n">h</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">for</span> <span class="n">hubKey</span> <span class="p">:=</span> <span class="k">range</span> <span class="n">hubMap</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">hubValue</span> <span class="p">:=</span> <span class="n">hubMap</span><span class="p">[</span><span class="n">hubKey</span><span class="p">]</span>
+</span><span class='line'>    <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;Running hub with id: &quot;</span> <span class="p">+</span> <span class="n">hubKey</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">go</span> <span class="n">hubValue</span><span class="p">.</span><span class="n">run</span><span class="p">()</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="n">http</span><span class="p">.</span><span class="n">Handle</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="n">http</span><span class="p">.</span><span class="n">FileServer</span><span class="p">(</span><span class="n">http</span><span class="p">.</span><span class="n">Dir</span><span class="p">(</span><span class="s">&quot;./&quot;</span><span class="p">)))</span>
+</span><span class='line'>  <span class="n">http</span><span class="p">.</span><span class="n">Handle</span><span class="p">(</span><span class="s">&quot;/ws&quot;</span><span class="p">,</span> <span class="n">websocket</span><span class="p">.</span><span class="n">Handler</span><span class="p">(</span><span class="n">wsHandler</span><span class="p">))</span>
+</span><span class='line'>  <span class="n">http</span><span class="p">.</span><span class="n">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:8080&quot;</span><span class="p">,</span> <span class="n">nil</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This concludes Part 2. We have a running server that can connect presentations to their remote-controllers. In Part 3 we will write some Javascript to connect to our server. We will listen to messages from the server and move our presentation slides using the <a href="http://lab.hakim.se/reveal-js">reveal.js</a> API.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Remote controlled html5 presentation with a Go backend - Part 1.]]></title>
+    <link href="http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1/"/>
+    <updated>2013-01-08T22:38:00-08:00</updated>
+    <id>http://RajivKurian.github.com/blog/2013/01/08/remote-controlled-html5-presentation-with-a-go-backend-part-1</id>
+    <content type="html"><![CDATA[<h4>What is this?</h4>
+
+<p>This is the first part of a three part series on building a remote-controlled presentation app in <a href="http://golang.org">Go</a>. Also see <a href="http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-2/">Part 2</a> and <a href="http://RajivKurian.github.com/blog/2013/01/09/remote-controlled-html5-presentation-with-a-go-backend-part-3/">Part 3</a>. The source code with instructions on how to run it can be found <a href="https://github.com/RajivKurian/remote-presentation">here</a>.</p>
+
+<h4>Part 1.</h4>
+
+<p>At work I am busy writing the connection layer for one of our backend services. We are mainly looking at Scala libraries like <a href="http://twitter.github.com/finagle/">Finagle</a> and <a href="http://spray.io">Spray.io</a>. I spent some time last year looking at <a href="http://golang.org">Go</a>, especially it&#8217;s concurrency facilities. Playing with all the Scala networking libraries, I was curious to see how it would be to write a server in Go. Go comes with a surprisingly complete standard library. Most other things one needs are also available as packages. For a thorough introduction to Go&#8217;s networking libraries please see <a href="http://jan.newmarch.name/go/">Network programming with Go</a>. <a href="http://gary.beagledreams.com/page/go-websocket-chat.html">Here</a> is a great websocket-chat demo that I looked at to understand some Go patterns.</p>
+
+<!-- more -->
+
+
+<p>I ended up building a application that allows one to remote control a HTML5 presentation. This would let control a presentation running on a projector with a remote-control on another device - say your mobile phone. I used the excellent <a href="http://lab.hakim.se/reveal-js">reveal.js</a> library for the HTML5 presentation part. The reasons for using reveal.js were two fold:</p>
+
+<ol>
+<li>I did not want to write too much HTML to get a complete application working.</li>
+<li>The best way to make a trivial demo look great is to pair it with an already impressive library and steal some of it&#8217;s thunder. Reveal.js does that for my application.</li>
+</ol>
+
+
+<p>The application is very simple:</p>
+
+<ol>
+<li>A client connects to the server and register with a presentation id. It register&#8217;s either as a presentation or as a remote-controller.</li>
+<li>If we find a corresponding presentation id we add a presentation client&#8217;s connection to a hub representing that id.</li>
+<li>Remote-controller clients can send messages like &#8220;left&#8221;, &#8220;right&#8221;, &#8220;up&#8221;, &#8220;down&#8221; to navigate all the presentations on a given hub.</li>
+</ol>
+
+
+<p>Okay let&#8217;s see some code. We start with our presentation messages. We represent our protocol messages with an int. If we wanted to add more message types this would be the place to start. Our protocol supports basic slide movement messages and a Unknown message for things that are &#8230; well unknown.</p>
+
+<figure class='code'><figcaption><span>presentation.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">package</span> <span class="n">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">import</span> <span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">type</span> <span class="n">PresentationMsg</span> <span class="nb">int</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">const</span> <span class="p">(</span>
+</span><span class='line'>  <span class="n">Left</span>    <span class="p">=</span> <span class="mi">1</span>
+</span><span class='line'>  <span class="n">Right</span>   <span class="p">=</span> <span class="mi">2</span>
+</span><span class='line'>  <span class="n">Up</span>      <span class="p">=</span> <span class="mi">3</span>
+</span><span class='line'>  <span class="n">Down</span>    <span class="p">=</span> <span class="mi">4</span>
+</span><span class='line'>  <span class="n">Unknown</span> <span class="p">=</span> <span class="mi">5</span>
+</span><span class='line'><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Lets start with the meat of the application now. We define an interface that represents our connections. These connections could have different implementations. Interfaces in Go tend to be brief. We only have two methods on our interface - one to enable writing messages to a connection and another to clean the connection in case of errors. The connection is responsible for reading messages from the client, deserializing them to protocol messages and sending them to our hub - this is not defined in the interface. We also add some imports that we will  use later.</p>
+
+<figure class='code'><figcaption><span>connection.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">package</span> <span class="n">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;code.google.com/p/go.net/websocket&quot;</span>
+</span><span class='line'>  <span class="s">&quot;errors&quot;</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;strings&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">type</span> <span class="n">Connection</span> <span class="k">interface</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">Write</span><span class="p">(</span><span class="n">msg</span> <span class="n">PresentationMsg</span><span class="p">)</span> <span class="n">error</span>
+</span><span class='line'>  <span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We start off with a websocket based implementation of the connection interface. The interface is generic enough for us to come up with other implementations like HTTP long polling, HTTP streaming or even TCP. That way clients that do not support web sockets could still communicate with ones that do.</p>
+
+<figure class='code'><figcaption><span>connection.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="c1">// Keep pointers to a Hub and a websocket connection.</span>
+</span><span class='line'><span class="k">type</span> <span class="n">WebSocketConnection</span> <span class="k">struct</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">hub</span> <span class="p">*</span><span class="n">Hub</span> <span class="c1">// We will see the Hub implementation later.</span>
+</span><span class='line'>  <span class="n">ws</span>  <span class="p">*</span><span class="n">websocket</span><span class="p">.</span><span class="n">Conn</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Implements the Cleanup method of the Connection interface.</span>
+</span><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">c</span> <span class="p">*</span><span class="n">WebSocketConnection</span><span class="p">)</span> <span class="n">Cleanup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">c</span><span class="p">.</span><span class="n">ws</span><span class="p">.</span><span class="n">Close</span><span class="p">()</span>  <span class="c1">// Close the websocket connection.</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Implementation of the Write method of the Connection interface.</span>
+</span><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">c</span> <span class="p">*</span><span class="n">WebSocketConnection</span><span class="p">)</span> <span class="n">Write</span><span class="p">(</span><span class="n">msg</span> <span class="n">PresentationMsg</span><span class="p">)</span> <span class="n">error</span> <span class="p">{</span>
+</span><span class='line'><span class="c1">// Serialize our protocol msg.</span>
+</span><span class='line'>  <span class="k">var</span> <span class="n">stringMsg</span> <span class="nb">string</span>
+</span><span class='line'>  <span class="k">switch</span> <span class="n">msg</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">case</span> <span class="n">Left</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;left&quot;</span>
+</span><span class='line'>  <span class="k">case</span> <span class="n">Right</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;right&quot;</span>
+</span><span class='line'>  <span class="k">case</span> <span class="n">Up</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;up&quot;</span>
+</span><span class='line'>  <span class="k">case</span> <span class="n">Down</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;down&quot;</span>
+</span><span class='line'>  <span class="c1">// We should only expect to handle slide movement msges here.</span>
+</span><span class='line'>  <span class="k">default</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">stringMsg</span> <span class="p">=</span> <span class="s">&quot;&quot;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">if</span> <span class="n">stringMsg</span> <span class="p">!=</span> <span class="s">&quot;&quot;</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">err</span> <span class="p">:=</span> <span class="n">websocket</span><span class="p">.</span><span class="n">Message</span><span class="p">.</span><span class="n">Send</span><span class="p">(</span><span class="n">c</span><span class="p">.</span><span class="n">ws</span><span class="p">,</span> <span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>    <span class="c1">// If there is an error close the connection.</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">err</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="n">errors</span><span class="p">.</span><span class="n">New</span><span class="p">(</span><span class="s">&quot;Got an unknown msg.&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Our websocket connection now implements the connection interface and can be treated as one. We still need a way for the websocket connection to read messages from the client and send them to our Hub. We define a method StartReader() to do just this. We specifically try to handle the following messages:</p>
+
+<ol>
+<li>Connection messages used to connect to a particular hub. This can be used by both presentation clients and remote-controller clients.</li>
+<li>Remote-control messages used to move the slides. We expect these to only come from remote-controller clients.</li>
+</ol>
+
+
+<figure class='code'><figcaption><span>connection.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">func</span> <span class="p">(</span><span class="n">c</span> <span class="p">*</span><span class="n">WebSocketConnection</span><span class="p">)</span> <span class="n">StartReader</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'><span class="c1">// Keep receiving messages in a for loop unless there is some error.</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">var</span> <span class="n">stringMsg</span> <span class="nb">string</span>
+</span><span class='line'>    <span class="n">err</span> <span class="p">:=</span> <span class="n">websocket</span><span class="p">.</span><span class="n">Message</span><span class="p">.</span><span class="n">Receive</span><span class="p">(</span><span class="n">c</span><span class="p">.</span><span class="n">ws</span><span class="p">,</span> <span class="p">&amp;</span><span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">break</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;Received a msg &quot;</span> <span class="p">+</span> <span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// a &quot;join&quot; msg is of the form &quot;join(Remote/Presentation):presentationId&quot;.</span>
+</span><span class='line'>    <span class="c1">// For eg: joinRemote:123</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">strings</span><span class="p">.</span><span class="n">HasPrefix</span><span class="p">(</span><span class="n">stringMsg</span><span class="p">,</span> <span class="s">&quot;joinRemote&quot;</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">presentationId</span> <span class="p">:=</span> <span class="n">strings</span><span class="p">.</span><span class="n">Split</span><span class="p">(</span><span class="n">stringMsg</span><span class="p">,</span> <span class="s">&quot;:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+</span><span class='line'>      <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;Msg: JoinRemote: &quot;</span> <span class="p">+</span> <span class="n">presentationId</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="c1">// Again we will see the hub implementation later. We try to retrieve a hub</span>
+</span><span class='line'>      <span class="c1">// from a global map of hubs otherwise we send an errorMsg to the client and cleanup.</span>
+</span><span class='line'>      <span class="k">if</span> <span class="n">hub</span><span class="p">,</span> <span class="n">ok</span> <span class="p">:=</span> <span class="n">hubMap</span><span class="p">[</span><span class="n">presentationId</span><span class="p">];</span> <span class="n">ok</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">hub</span> <span class="p">=</span> <span class="p">&amp;</span><span class="n">hub</span>  <span class="c1">// Keep a pointer to the hub so that it can be used later.</span>
+</span><span class='line'>      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">writeErrorMsg</span><span class="p">(</span><span class="s">&quot;Invalid Presentation id: &quot;</span> <span class="p">+</span> <span class="n">presentationId</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">strings</span><span class="p">.</span><span class="n">HasPrefix</span><span class="p">(</span><span class="n">stringMsg</span><span class="p">,</span> <span class="s">&quot;joinPresentation&quot;</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">presentationId</span> <span class="p">:=</span> <span class="n">strings</span><span class="p">.</span><span class="n">Split</span><span class="p">(</span><span class="n">stringMsg</span><span class="p">,</span> <span class="s">&quot;:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+</span><span class='line'>      <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;Msg: Join: &quot;</span> <span class="p">+</span> <span class="n">presentationId</span><span class="p">)</span>
+</span><span class='line'>      <span class="c1">// If there is an entry for this presentation then register this connection</span>
+</span><span class='line'>      <span class="c1">// with it otherwise send an error.</span>
+</span><span class='line'>      <span class="k">if</span> <span class="n">hub</span><span class="p">,</span> <span class="n">ok</span> <span class="p">:=</span> <span class="n">hubMap</span><span class="p">[</span><span class="n">presentationId</span><span class="p">];</span> <span class="n">ok</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">hub</span> <span class="p">=</span> <span class="p">&amp;</span><span class="n">hub</span>
+</span><span class='line'>        <span class="n">hub</span><span class="p">.</span><span class="n">registerConnection</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+</span><span class='line'>      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">writeErrorMsg</span><span class="p">(</span><span class="s">&quot;Invalid Presentation id: &quot;</span> <span class="p">+</span> <span class="n">presentationId</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">c</span><span class="p">.</span><span class="n">hub</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// Accept remote msges only if there is a valid presentation hub.</span>
+</span><span class='line'>      <span class="k">var</span> <span class="n">msg</span> <span class="n">PresentationMsg</span>
+</span><span class='line'>      <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;Msg: Remote: &quot;</span> <span class="p">+</span> <span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">switch</span> <span class="n">stringMsg</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;left&quot;</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Left</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;right&quot;</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Right</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;up&quot;</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Up</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;down&quot;</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Down</span>
+</span><span class='line'>      <span class="k">default</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">msg</span> <span class="p">=</span> <span class="n">Unknown</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">if</span> <span class="n">msg</span> <span class="p">!=</span> <span class="n">Unknown</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">hub</span><span class="p">.</span><span class="n">sendMsg</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+</span><span class='line'>      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">writeErrorMsg</span><span class="p">(</span><span class="s">&quot;Not a valid Msg: &quot;</span> <span class="p">+</span> <span class="n">stringMsg</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">hub</span><span class="p">.</span><span class="n">unregisterConnection</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span> <span class="c1">// Send an error msg and cleanup.</span>
+</span><span class='line'>      <span class="n">c</span><span class="p">.</span><span class="n">writeErrorMsg</span><span class="p">(</span><span class="s">&quot;Must register with a valid presentationId before sending msges&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="n">c</span><span class="p">.</span><span class="n">Cleanup</span><span class="p">()</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Almost done with our websocket connection. We define a function wsHandler that will be later used by our websocket server. The websocket server will create a new go routine with our handler for every websocket connection. For every new websocket connection we create a WebsocketConnection object and call the startReader method on it. Again since our handler is run as a go routine startReader will not block the application. We also make use of go&#8217;s defer facility to clean up when the handler exits.</p>
+
+<figure class='code'><figcaption><span>connection.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">func</span> <span class="n">wsHandler</span><span class="p">(</span><span class="n">ws</span> <span class="p">*</span><span class="n">websocket</span><span class="p">.</span><span class="n">Conn</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">c</span> <span class="p">:=</span> <span class="p">&amp;</span><span class="n">WebSocketConnection</span><span class="p">{</span><span class="n">hub</span><span class="p">:</span> <span class="n">nil</span><span class="p">,</span> <span class="n">ws</span><span class="p">:</span> <span class="n">ws</span><span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="k">func</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// Unregister here.</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">c</span><span class="p">.</span><span class="n">hub</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">c</span><span class="p">.</span><span class="n">hub</span><span class="p">.</span><span class="n">unregisterConnection</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;A websocket handler exited&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}()</span>
+</span><span class='line'>  <span class="c1">// Start reader.</span>
+</span><span class='line'>  <span class="n">c</span><span class="p">.</span><span class="n">StartReader</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We have a working websocket connection now. In Part 2 we&#8217;ll look at the implementation of the hub that let&#8217;s remote-controller clients talk to the presentation clients.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[A simple Redis client using Spray io, actors, futures and promises.]]></title>
+    <link href="http://RajivKurian.github.com/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises/"/>
+    <updated>2012-12-25T17:52:00-08:00</updated>
+    <id>http://RajivKurian.github.com/blog/2012/12/25/a-simple-redis-client-using-spray-io-actors-futures-and-promises</id>
+    <content type="html"><![CDATA[<p><em>Note:</em> The code for this post can be found <a href="https://github.com/RajivKurian/toy-redis-client">here</a></p>
+
+<p>I recently wrote a toy <a href="http://redis.io/">Redis</a> client (only supports gets and sets) to experiment with the Scala 2.10 concurrency features. I was especially interested in playing with Futures and Promises and to see how they combine with Actors.</p>
+
+<p>I ended up using <a href="http://spray.io">Spray</a> for all the networking needs. According to their website Spray&#8217;s API is asynchronous, non-blocking and is based on Actors and Futures. It uses Java NIO internally like <a href="http://netty.io">Netty</a>. The <a href="http://spray.io/documentation/spray-io/">documentation</a> is pretty exhaustive and had answers to most questions that I had.</p>
+
+<p>We start with our build.sbt file to get all the dependencies in order.</p>
+
+<figure class='code'><figcaption><span>build.sbt</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="n">name</span> <span class="o">:=</span> <span class="s">&quot;redis-actor&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">version</span> <span class="o">:=</span> <span class="s">&quot;1.0&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">scalaVersion</span> <span class="o">:=</span> <span class="s">&quot;2.10.0&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">scalacOptions</span> <span class="o">++=</span> <span class="nc">Seq</span><span class="o">(</span><span class="s">&quot;-unchecked&quot;</span><span class="o">,</span> <span class="s">&quot;-deprecation&quot;</span><span class="o">,</span> <span class="s">&quot;-encoding&quot;</span><span class="o">,</span> <span class="s">&quot;utf8&quot;</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Typesafe.</span>
+</span><span class='line'><span class="n">resolvers</span> <span class="o">+=</span> <span class="s">&quot;Typesafe Repository&quot;</span> <span class="n">at</span> <span class="s">&quot;http://repo.typesafe.com/typesafe/releases/&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Spray.</span>
+</span><span class='line'><span class="n">resolvers</span> <span class="o">+=</span> <span class="s">&quot;spray repo&quot;</span> <span class="n">at</span> <span class="s">&quot;http://repo.spray.io&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">libraryDependencies</span> <span class="o">+=</span> <span class="s">&quot;com.typesafe.akka&quot;</span> <span class="o">%%</span> <span class="s">&quot;akka-actor&quot;</span> <span class="o">%</span> <span class="s">&quot;2.1.0&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">libraryDependencies</span> <span class="o">+=</span> <span class="s">&quot;io.spray&quot;</span> <span class="o">%</span> <span class="s">&quot;spray-io&quot;</span> <span class="o">%</span> <span class="s">&quot;1.1-M7&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Our Redis Client extends Spray IOClient. From the Spray documentation: The IOClient is a simple actor base class for client-side networking components. It builds upon an IOBridge and provides client-side connection management. Sounds good to me.</p>
+
+<!-- more -->
+
+
+<p>We start with the protocol our client will support. We only plan to support the Redis get and set commands.</p>
+
+<figure class='code'><figcaption><span>RedisClient</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">RedisClient</span> <span class="o">{</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">value</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">class</span> <span class="nc">KeyNotFoundException</span> <span class="k">extends</span> <span class="nc">Exception</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>A brief aside on Redis and the Redis Protocol.</h4>
+
+<p>Redis is an open source, advanced key-value store. It is very fast and used at a bunch of big companies including Twitter. The Redis <a href="http://redis.io/topics/protocol">protocol</a> is very simple. Every Redis command can be serialized to the following form:</p>
+
+<pre><code>*&lt;number of arguments&gt; CR LF&#x000A;$&lt;number of bytes of argument 1&gt; CR LF&#x000A;&lt;argument data&gt; CR LF&#x000A;...&#x000A;$&lt;number of bytes of argument N&gt; CR LF&#x000A;&lt;argument data&gt; CR LF&#x000A;</code></pre>
+
+
+<p>So a simple Redis get for a &#8220;hello&#8221; key would look like:</p>
+
+<pre><code>*3&#x000A;$2&#x000A;GET&#x000A;$5&#x000A;hello&#x000A;</code></pre>
+
+
+<p>Great! That sounds easy given we only want to implement the Get and Set commands. So once we establish a TCP connection with the Redis server all we need to do is translate our get and set commands using the above protocol and send them over the wire. The responses are also encoded using the same protocol.</p>
+
+<p>But how do we match responses on the TCP connection to the requests we sent earlier? The answer is Redis will send responses in the same order that it received the requests. So if I send two successful requests Request A and Request B (A before B) and then I receive two responses Request C and Request D (C before D), I can assume that C is the response to request A and D is the response to Request B. In short we need to track the order of the requests so that when the responses arrive we can match them up and dispatch the responses appropriately.</p>
+
+<h4>Scala Futures and Promises.</h4>
+
+<p>If you don&#8217;t know much about the future and promises spec I recommend reading <a href="https://speakerdeck.com/heathermiller/futures-and-promises-in-scala-2-dot-10">1</a> or <a href="http://docs.scala-lang.org/sips/pending/futures-promises.html">2</a>. From here on I assume that you have a rough idea about Futures and Promises.</p>
+
+<h5>Our API and Implementation</h5>
+
+<p>To support an synchronous API we will use Scala 2.10 Futures and Promises.
+Everytime we receive a request we will do the following:</p>
+
+<ol>
+<li>Encode the request using the Redis protocol.</li>
+<li>Send the bytes across the wire.</li>
+<li>Create a promise representing the result of the request from (1) and add it to a queue.</li>
+<li>Send the caller a future that is backed by the promise from (3)</li>
+</ol>
+
+
+<figure class='code'><figcaption><span>RedisClient1</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">class</span> <span class="nc">RedisClient</span><span class="o">(</span><span class="nc">_ioBridge</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">IOClient</span><span class="o">(</span><span class="nc">_ioBridge</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>  <span class="c1">// Our queue to maintain the order of requests.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">promiseQueue</span> <span class="k">=</span> <span class="k">new</span> <span class="n">scala</span><span class="o">.</span><span class="n">collection</span><span class="o">.</span><span class="n">mutable</span><span class="o">.</span><span class="nc">Queue</span><span class="o">[</span><span class="kt">Promise</span><span class="o">[</span><span class="k">_</span><span class="o">]]</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// We will use this connection to store our connection to the Redis server.</span>
+</span><span class='line'>  <span class="k">var</span> <span class="n">connection</span><span class="k">:</span> <span class="kt">Connection</span> <span class="o">=</span> <span class="k">_</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">override</span> <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="n">myReceive</span> <span class="n">orElse</span> <span class="k">super</span><span class="o">.</span><span class="n">receive</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="n">myReceive</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">readCommand</span> <span class="k">=</span> <span class="s">&quot;*2\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                        <span class="s">&quot;$3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                        <span class="s">&quot;GET\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                        <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                        <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span>
+</span><span class='line'>      <span class="c1">// Send the command bytes to Redis and queue a promise with the type of the expected result.</span>
+</span><span class='line'>      <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">readCommand</span><span class="o">,</span> <span class="nc">Promise</span><span class="o">[</span><span class="kt">String</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">writeCommand</span> <span class="k">=</span> <span class="s">&quot;*3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;SET\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">value</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="n">value</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span>
+</span><span class='line'>      <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">writeCommand</span><span class="o">,</span> <span class="nc">Promise</span><span class="o">[</span><span class="kt">Boolean</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">IOClient</span><span class="o">.</span><span class="nc">Closed</span><span class="o">(</span><span class="k">_</span><span class="o">,</span> <span class="n">reason</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Conenection closed &quot;</span><span class="o">,</span> <span class="n">reason</span><span class="o">)</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">command</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">resultPromise</span><span class="k">:</span> <span class="kt">Promise</span><span class="o">[</span><span class="k">_</span><span class="o">])</span> <span class="o">{</span>
+</span><span class='line'>    <span class="c1">// Send the bytes to the Redis Server.</span>
+</span><span class='line'>    <span class="n">connection</span><span class="o">.</span><span class="n">ioBridge</span> <span class="o">!</span> <span class="nc">IOBridge</span><span class="o">.</span><span class="nc">Send</span><span class="o">(</span><span class="n">connection</span><span class="o">,</span> <span class="nc">BufferBuilder</span><span class="o">(</span><span class="n">command</span><span class="o">).</span><span class="n">toByteBuffer</span><span class="o">)</span>
+</span><span class='line'>    <span class="c1">// Add the promise to our queue and pipe the future to the caller.</span>
+</span><span class='line'>    <span class="n">promiseQueue</span> <span class="o">+=</span> <span class="n">resultPromise</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">f</span> <span class="k">=</span> <span class="n">resultPromise</span><span class="o">.</span><span class="n">future</span>
+</span><span class='line'>    <span class="n">pipe</span><span class="o">(</span><span class="n">f</span><span class="o">)</span> <span class="n">to</span> <span class="n">sender</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now when we receive a response from the Redis-server we do the following:</p>
+
+<ol start="5">
+<li> Decode the response</li>
+<li> Fetch from our queue, the promise associated with the pending request</li>
+<li> Complete the promise from (6) with the decoded response.</li>
+</ol>
+
+
+<p>Spray sends our actor a message when we receive bytes on a connected client. These bytes represent an encoded Redis response. You might observe that the parsing of the redis responses is very shabby and does not check for errors. I am sure you can write code that is more modular and robust. Let&#8217;s modify the myRecieve partial function to complete our parsing logic:</p>
+
+<figure class='code'><figcaption><span>myReceive2</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'>  <span class="k">def</span> <span class="n">myReceive</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">readCommand</span> <span class="k">=</span> <span class="s">&quot;*2\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                       <span class="s">&quot;$3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                       <span class="s">&quot;GET\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                       <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                       <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span>
+</span><span class='line'>      <span class="c1">// Send the command bytes to Redis and queue a promise with the type of the expected result.</span>
+</span><span class='line'>      <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">readCommand</span><span class="o">,</span> <span class="nc">Promise</span><span class="o">[</span><span class="kt">String</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">writeCommand</span> <span class="k">=</span> <span class="s">&quot;*3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$3\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;SET\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="s">&quot;$&quot;</span> <span class="o">+</span> <span class="n">value</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span> <span class="o">+</span>
+</span><span class='line'>                          <span class="n">value</span> <span class="o">+</span> <span class="s">&quot;\r\n&quot;</span>
+</span><span class='line'>      <span class="n">sendRedisCommand</span><span class="o">(</span><span class="n">writeCommand</span><span class="o">,</span> <span class="nc">Promise</span><span class="o">[</span><span class="kt">Boolean</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// NEW STUFF HERE ......</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">IOClient</span><span class="o">.</span><span class="nc">Received</span><span class="o">(</span><span class="n">handle</span><span class="o">,</span> <span class="n">buffer</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">z</span> <span class="k">=</span> <span class="n">buffer</span><span class="o">.</span><span class="n">drainToString</span>
+</span><span class='line'>      <span class="c1">// We first split the response to get the different &quot;lines&quot;.</span>
+</span><span class='line'>      <span class="k">val</span> <span class="n">responseArray</span> <span class="k">=</span> <span class="n">z</span><span class="o">.</span><span class="n">split</span><span class="o">(</span><span class="s">&quot;\r\n&quot;</span><span class="o">)</span>
+</span><span class='line'>      <span class="c1">// We zip with index so that we can move to certain indices of the response Array.</span>
+</span><span class='line'>      <span class="n">responseArray</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">foreach</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">response</span><span class="o">,</span> <span class="n">index</span><span class="o">)</span> <span class="k">=&gt;</span>
+</span><span class='line'>        <span class="k">if</span> <span class="o">(</span><span class="n">response</span> <span class="n">startsWith</span> <span class="s">&quot;+&quot;</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="c1">// Must be a response to a SET request. Check if the string after &quot;+&quot; is an &quot;OK&quot;.</span>
+</span><span class='line'>          <span class="k">val</span> <span class="n">setAnswer</span> <span class="k">=</span> <span class="n">response</span><span class="o">.</span><span class="n">substring</span><span class="o">(</span><span class="mi">1</span><span class="o">,</span> <span class="n">response</span><span class="o">.</span><span class="n">length</span><span class="o">)</span>
+</span><span class='line'>          <span class="k">val</span> <span class="n">nextPromise</span> <span class="k">=</span> <span class="n">promiseQueue</span><span class="o">.</span><span class="n">dequeue</span><span class="o">.</span><span class="n">asInstanceOf</span><span class="o">[</span><span class="kt">Promise</span><span class="o">[</span><span class="kt">Boolean</span><span class="o">]]</span>
+</span><span class='line'>          <span class="n">nextPromise</span> <span class="n">success</span> <span class="o">(</span><span class="k">if</span> <span class="o">(</span><span class="n">setAnswer</span> <span class="o">==</span> <span class="s">&quot;OK&quot;</span><span class="o">)</span> <span class="kc">true</span> <span class="k">else</span> <span class="kc">false</span><span class="o">)</span>
+</span><span class='line'>        <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">(</span><span class="n">response</span> <span class="n">startsWith</span> <span class="s">&quot;$&quot;</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="c1">// Must be a response to a GET request. The next line contains the result.</span>
+</span><span class='line'>          <span class="k">val</span> <span class="n">nextPromise</span> <span class="k">=</span> <span class="n">promiseQueue</span><span class="o">.</span><span class="n">dequeue</span><span class="o">.</span><span class="n">asInstanceOf</span><span class="o">[</span><span class="kt">Promise</span><span class="o">[</span><span class="kt">String</span><span class="o">]]</span>
+</span><span class='line'>          <span class="k">if</span> <span class="o">(</span><span class="n">response</span> <span class="n">endsWith</span> <span class="s">&quot;-1&quot;</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">nextPromise</span> <span class="n">failure</span> <span class="o">(</span><span class="k">new</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">KeyNotFoundException</span><span class="o">)</span>
+</span><span class='line'>          <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">nextPromise</span> <span class="n">success</span> <span class="n">responseArray</span><span class="o">(</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="o">)</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">IOClient</span><span class="o">.</span><span class="nc">Closed</span><span class="o">(</span><span class="k">_</span><span class="o">,</span> <span class="n">reason</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Conenection closed &quot;</span><span class="o">,</span> <span class="n">reason</span><span class="o">)</span>
+</span><span class='line'>  <span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Almost there. We will write a factory method that connects to a Redis Server, creates a new RedisClient class and makes sure it has a reference to the connection that it can use to communicate with the Redis server. We create a new kind of message SetConnection that we use to make sure our client has a reference to the connection with the RedisServer. Note the use of the implicit ActorSystem which makes the API a bit prettier.</p>
+
+<figure class='code'><figcaption><span>RedisClient-object</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">RedisClient</span> <span class="o">{</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="nc">Value</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">class</span> <span class="nc">KeyNotFoundException</span> <span class="k">extends</span> <span class="nc">Exception</span>
+</span><span class='line'>  <span class="k">case</span> <span class="k">class</span> <span class="nc">SetConnection</span><span class="o">(</span><span class="n">handle</span><span class="k">:</span> <span class="kt">Connection</span><span class="o">)</span>
+</span><span class='line'>  <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">host</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">port</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">ioBridge</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span> <span class="o">(</span><span class="k">implicit</span> <span class="n">system</span><span class="k">:</span> <span class="kt">ActorSystem</span><span class="o">)</span> <span class="k">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">val</span> <span class="n">client</span> <span class="k">=</span> <span class="n">system</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">RedisClient</span><span class="o">(</span><span class="n">ioBridge</span><span class="o">)),</span> <span class="s">&quot;redis-client&quot;</span><span class="o">)</span>
+</span><span class='line'>    <span class="k">implicit</span> <span class="k">val</span> <span class="n">timeout</span> <span class="k">=</span> <span class="nc">Timeout</span><span class="o">(</span><span class="mi">5</span> <span class="n">seconds</span><span class="o">)</span>
+</span><span class='line'>    <span class="c1">// Block here.</span>
+</span><span class='line'>    <span class="k">val</span> <span class="nc">IOClient</span><span class="o">.</span><span class="nc">Connected</span><span class="o">(</span><span class="n">handle</span><span class="o">)</span> <span class="k">=</span> <span class="nc">Await</span><span class="o">.</span><span class="n">result</span><span class="o">(</span><span class="n">client</span><span class="o">.</span><span class="n">ask</span><span class="o">(</span><span class="nc">IOClient</span><span class="o">.</span><span class="nc">Connect</span><span class="o">(</span><span class="n">host</span><span class="o">,</span> <span class="n">port</span><span class="o">)),</span> <span class="n">timeout</span><span class="o">.</span><span class="n">duration</span><span class="o">)</span>
+</span><span class='line'>    <span class="n">client</span> <span class="o">!</span> <span class="nc">SetConnection</span><span class="o">(</span><span class="n">handle</span><span class="o">)</span>
+</span><span class='line'>    <span class="n">client</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We need to also modify our client&#8217;s myReceive partial function to process the SetConnection message</p>
+
+<figure class='code'><figcaption><span>myReceive3</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'>  <span class="k">def</span> <span class="n">myReceive</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">case</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">SetConnection</span><span class="o">(</span><span class="n">connection</span><span class="k">:</span> <span class="kt">Connection</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="k">this</span><span class="o">.</span><span class="n">connection</span> <span class="k">=</span> <span class="n">connection</span>
+</span><span class='line'>    <span class="c1">// Rest of the stuff remains the same.</span>
+</span><span class='line'>    <span class="o">.....</span>
+</span><span class='line'>    <span class="o">.....</span>
+</span><span class='line'>  <span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>Using the client.</h4>
+
+<p>To run our Main we need to make sure that we have a local instance of Redis running on port 6379. We set a bunch of keys to some values and later get these values and verify that they match our expectation. Some points to note:</p>
+
+<ul>
+<li>We make liberal use of zip and unzip for the purpose of keeping the keys, values and the results in tuples so that we can print them out together. The examples might look a lot more complicated because of this.</li>
+<li>Since the client is an actor, the messages sent to it are serialized . Thus we do not have to worry about race conditions such as processing a get request before a corresponding set request (assuming that the code using the client does not make such a mistake).</li>
+<li>We use the mapTo syntax to coerce our results to the expected type. Maybe there should be a wrapper object which does this for us.</li>
+<li>We add success and failure handlers to the futures we receive from the RedisClient actor. We could have also used the onComplete handler instead. Note that a different thread might run these handlers. Here we merely print our results, but we need to be careful of more dangerous side effects like mutations. You are left on your own to deal with the Java Memory Model if you want to modify vars in these handlers. A safe way to do such a thing would be to serialize access through Actors or some other form of mutual exclusion like locking (Oh Noos).</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>Main</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+</pre></td><td class='code'><pre><code class='scala'><span class='line'><span class="k">object</span> <span class="nc">Main</span> <span class="k">extends</span> <span class="nc">App</span> <span class="o">{</span>
+</span><span class='line'>  <span class="c1">// We need an ActorSystem to host our application in.</span>
+</span><span class='line'>  <span class="k">implicit</span> <span class="k">val</span> <span class="n">system</span> <span class="k">=</span> <span class="nc">ActorSystem</span><span class="o">()</span>
+</span><span class='line'>  <span class="c1">// Create and start an IOBridge.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">ioBridge</span> <span class="k">=</span> <span class="nc">IOExtension</span><span class="o">(</span><span class="n">system</span><span class="o">).</span><span class="n">ioBridge</span><span class="o">()</span>
+</span><span class='line'>  <span class="c1">// The futures returned by the ask pattern will time out based on this implicit timeout.</span>
+</span><span class='line'>  <span class="k">implicit</span> <span class="k">val</span> <span class="n">timeout</span> <span class="k">=</span> <span class="nc">Timeout</span><span class="o">(</span><span class="mi">5</span> <span class="n">seconds</span><span class="o">)</span>
+</span><span class='line'> <span class="c1">// Our Redis client.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">client</span> <span class="k">=</span> <span class="nc">RedisClient</span><span class="o">(</span><span class="s">&quot;127.0.0.1&quot;</span><span class="o">,</span> <span class="mi">6379</span><span class="o">,</span> <span class="n">ioBridge</span><span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// Get a list of keys and values to set in Redis.</span>
+</span><span class='line'>  <span class="c1">// keys = hello1, hello2, ...</span>
+</span><span class='line'>  <span class="c1">// values = world1, world2, ...</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">numKeys</span> <span class="k">=</span> <span class="mi">3</span>
+</span><span class='line'>  <span class="k">val</span> <span class="o">(</span><span class="n">keys</span><span class="o">,</span> <span class="n">values</span><span class="o">)</span> <span class="k">=</span> <span class="o">(</span><span class="mi">1</span> <span class="n">to</span> <span class="n">numKeys</span> <span class="n">map</span> <span class="o">{</span> <span class="n">num</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="s">&quot;hello&quot;</span> <span class="o">+</span> <span class="n">num</span><span class="o">,</span> <span class="s">&quot;world&quot;</span> <span class="o">+</span> <span class="n">num</span><span class="o">)</span> <span class="o">}).</span><span class="n">unzip</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// Set the keys in Redis. We store the Futures with the keys and values to print them later.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">writeResults</span> <span class="k">=</span> <span class="n">keys</span> <span class="n">zip</span> <span class="n">values</span> <span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="k">=&gt;</span>
+</span><span class='line'>    <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">,</span> <span class="o">(</span><span class="n">client</span> <span class="o">?</span> <span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Set</span><span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)).</span><span class="n">mapTo</span><span class="o">[</span><span class="kt">Boolean</span><span class="o">])</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="n">writeResults</span> <span class="n">foreach</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">,</span> <span class="n">result</span><span class="o">)</span> <span class="k">=&gt;</span>
+</span><span class='line'>    <span class="n">result</span> <span class="n">onSuccess</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="n">someBoolean</span> <span class="k">if</span> <span class="n">someBoolean</span> <span class="o">==</span> <span class="kc">true</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Set &quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot; to value &quot;</span> <span class="o">+</span> <span class="n">value</span><span class="o">)</span>
+</span><span class='line'>      <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Failed to set key &quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot; to value &quot;</span> <span class="o">+</span> <span class="n">value</span><span class="o">)</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="n">result</span> <span class="n">onFailure</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="n">t</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Failed to set key &quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot; to value &quot;</span> <span class="o">+</span> <span class="n">value</span> <span class="o">+</span> <span class="s">&quot; : &quot;</span> <span class="o">+</span> <span class="n">t</span><span class="o">)</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// Get the keys from Redis. Store the keys with the Futures to print them later.</span>
+</span><span class='line'>  <span class="k">val</span> <span class="n">readResults</span> <span class="k">=</span> <span class="n">keys</span> <span class="n">map</span> <span class="o">{</span> <span class="n">key</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">client</span><span class="o">.</span><span class="n">ask</span><span class="o">(</span><span class="nc">RedisClient</span><span class="o">.</span><span class="nc">Get</span><span class="o">(</span><span class="n">key</span><span class="o">)).</span><span class="n">mapTo</span><span class="o">[</span><span class="kt">String</span><span class="o">])</span> <span class="o">}</span>
+</span><span class='line'>  <span class="n">readResults</span> <span class="n">zip</span> <span class="n">values</span> <span class="n">foreach</span> <span class="o">{</span> <span class="k">case</span> <span class="o">((</span><span class="n">key</span><span class="o">,</span> <span class="n">result</span><span class="o">),</span> <span class="n">expectedValue</span><span class="o">)</span> <span class="k">=&gt;</span>
+</span><span class='line'>    <span class="n">result</span><span class="o">.</span><span class="n">onSuccess</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="n">resultString</span> <span class="k">=&gt;</span>
+</span><span class='line'>        <span class="n">println</span><span class="o">(</span><span class="s">&quot;Got a result for &quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;: &quot;</span><span class="o">+</span> <span class="n">resultString</span><span class="o">)</span>
+</span><span class='line'>        <span class="n">assert</span><span class="o">(</span><span class="n">resultString</span> <span class="o">==</span> <span class="n">expectedValue</span><span class="o">)</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="n">result</span><span class="o">.</span><span class="n">onFailure</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="n">t</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Got some exception &quot;</span> <span class="o">+</span> <span class="n">t</span><span class="o">)</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That wraps up a rather long post. To end things I want to talk about a few things I learnt about Futures and Promises from this exercise:</p>
+
+<ul>
+<li>Futures and Promises make it very easy to implement asynchronous code that is still easy to read.</li>
+<li>One has to be careful of the code they execute in the onComplete handlers of a future, since they execute in unknown threads.</li>
+<li>When you want to send the result of a Future to the sender of an Actor - the pipe pattern is a huge help. This internally adds a completion handler to the Future and onComplete sends the results to the sender without blocking. The much more verbose and error-pronse alternative is to keep a reference to the current sender and to add the onComplete handlers yourself. More can be found <a href="http://stackoverflow.com/questions/12455764/akka-avoiding-wrapping-future-when-responding-to-non-actor-code">here</a></li>
+<li>Though not shown here futures are easy to compose - so to get a result from say concatenating three separate Redis GET results would be pretty easy.</li>
+<li>The order of completion of promises does not dictate the order in which the onComplete handlers on the attached futures are executed. For eg if you run our Main, you might see results printed in a weird order:</li>
+</ul>
+
+
+<pre>
+Got a result for hello1: world1
+Got a result for hello2: world2
+Got a result for hello3: world3
+Set hello2 to value world2
+Set hello1 to value world1
+Set hello3 to value world3
+</pre>
+
+
+<p>INSTEAD OF:</p>
+
+<pre>
+Set hello1 to value world1
+Set hello2 to value world2
+Set hello3 to value world3
+Got a result for hello1: world1
+Got a result for hello2: world2
+Got a result for hello3: world3
+</pre>
+
+
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Overriding vals in traits.]]></title>
+    <link href="http://RajivKurian.github.com/blog/2012/12/23/overriding-vals-in-traits/"/>
+    <updated>2012-12-23T21:59:00-08:00</updated>
+    <id>http://RajivKurian.github.com/blog/2012/12/23/overriding-vals-in-traits</id>
+    <content type="html"><![CDATA[<p>When implementing traits we often want to override the vals declared in said trait.</p>
+
+<p>One way to achieve this is to treat the val as a field of the constructor. A contrived example is:</p>
+
+<!-- more -->
+
+
+<div><script src='https://gist.github.com/4246797.js'></script>
+<noscript><pre><code>trait Foo {
+  val a: Int
+  def printA = println(a)
+}
+
+class Bar(val a: Int) extends Foo
+
+// User Bar like this:
+
+val aBar = new Bar(42)
+aBar.printA</code></pre></noscript></div>
+
+
+
+]]></content>
+  </entry>
+  
+</feed>
